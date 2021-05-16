@@ -1,6 +1,5 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::types::*;
 
 use std::{
     fmt, collections::HashMap,
@@ -10,7 +9,6 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize, Deserializer, de};
-use pnet::{datalink, ipnetwork::IpNetwork};
 
 #[derive(Clone, Debug)]
 pub struct CLevel(pub Level);
@@ -27,6 +25,44 @@ impl<'de> Deserialize<'de> for CLevel {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CLevel, D::Error> {
         let s: String = Deserialize::deserialize(deserializer)?;
         Level::from_str(&s).map(|e|CLevel(e)).map_err(de::Error::custom)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CIP4Addr(pub Ipv4Addr);
+
+impl Deref for CIP4Addr {
+    type Target = Ipv4Addr;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for CIP4Addr {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CIP4Addr, D::Error> {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        let addr: Ipv4Addr = s.parse().map_err(de::Error::custom)?;
+        Ok(CIP4Addr(addr))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CIP6Addr(pub Ipv6Addr);
+
+impl Deref for CIP6Addr {
+    type Target = Ipv6Addr;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for CIP6Addr {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CIP6Addr, D::Error> {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        let addr: Ipv6Addr = s.parse().map_err(de::Error::custom)?;
+        Ok(CIP6Addr(addr))
     }
 }
 
@@ -92,73 +128,10 @@ impl Default for ConcurrencyProfile {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub struct NetworkingProfile {
-    pub bind_local_ipv4_if: Option<String>,
-    pub bind_local_ipv6_if: Option<String>
-}
-
-#[derive(Clone, Debug)]
-pub struct NetworkingProfileResolved {
-    pub bind_local_ipv4_address: Option<Ipv4Addr>,
-    pub bind_local_ipv6_address: Option<Ipv6Addr>
-}
-
-impl NetworkingProfile {
-    pub fn resolve(&self) -> Result<NetworkingProfileResolved> {
-        let mut r = NetworkingProfileResolved{
-            bind_local_ipv4_address: None,
-            bind_local_ipv6_address: None,
-        };
-
-        if self.bind_local_ipv6_if.is_some() {
-            let if_name = self.bind_local_ipv6_if.clone().unwrap();
-            for interface in &datalink::interfaces() {
-                if interface.name == if_name {
-                    for ip in &interface.ips {
-                        match ip {
-                            IpNetwork::V6(a) => {
-                                r.bind_local_ipv6_address = Some(a.ip());
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    if r.bind_local_ipv6_address.is_none() {
-                        return Err(anyhow!("couldn't locate ipv6 address on interface {}", if_name).into());
-                    }
-                }
-            }
-            if r.bind_local_ipv6_address.is_none() {
-                return Err(anyhow!("couldn't locate interface {}", if_name).into());
-            }
-        }
-
-        if self.bind_local_ipv4_if.is_some() {
-            let if_name = self.bind_local_ipv4_if.clone().unwrap();
-            for interface in &datalink::interfaces() {
-                if interface.name == if_name {
-                    for ip in &interface.ips {
-                        match ip {
-                            IpNetwork::V4(a) => {
-                                r.bind_local_ipv4_address = Some(a.ip());
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    if r.bind_local_ipv4_address.is_none() {
-                        return Err(anyhow!("couldn't locate ipv4 address on interface {}", if_name).into());
-                    }
-                }
-            }
-            if r.bind_local_ipv4_address.is_none() {
-                return Err(anyhow!("couldn't locate interface {}", if_name).into());
-            }
-        }
-
-        Ok(r)
-    }
+    pub bind_local_ipv4: Option<CIP4Addr>,
+    pub bind_local_ipv6: Option<CIP6Addr>
 }
 
 impl ConcurrencyProfile {

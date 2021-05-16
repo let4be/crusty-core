@@ -34,7 +34,6 @@ pin-project = "~1.0.7"
 trust-dns-resolver = "~0.20.2"
 lazy_static = "~1.4.0"
 futures-lite = "~1.11.3"
-pnet = "~0.27.2"
 serde = {version = "~1.0.125", features = ["derive"] }
 serde_derive = "~1.0.125"
 humanize-rs = "~0.1.5"

@@ -27,7 +27,7 @@ use anyhow::{anyhow};
 pub struct Crawler {
     url: Url,
     settings: config::CrawlerSettings,
-    networking_profile: config::NetworkingProfileResolved
+    networking_profile: config::NetworkingProfile
 }
 
 #[derive(Clone)]
@@ -69,7 +69,7 @@ impl HttpClientFactory {
 }
 
 impl Crawler {
-    pub fn new(url: Url, settings: config::CrawlerSettings, networking_profile: config::NetworkingProfileResolved) -> Crawler {
+    pub fn new(url: Url, settings: config::CrawlerSettings, networking_profile: config::NetworkingProfile) -> Crawler {
         Crawler {
             url,
             settings,
@@ -98,8 +98,8 @@ impl Crawler {
             let client_factory = HttpClientFactory {
                 settings: self.settings.clone(),
                 resolver: resolver.clone(),
-                addr_ipv4: self.networking_profile.bind_local_ipv4_address,
-                addr_ipv6: self.networking_profile.bind_local_ipv6_address,
+                addr_ipv4: self.networking_profile.bind_local_ipv4.clone().map(|v|*v),
+                addr_ipv6: self.networking_profile.bind_local_ipv6.clone().map(|v|*v),
             };
 
             let mut processor_handles = vec![];
@@ -145,7 +145,7 @@ pub struct MultiCrawler<T: JobContextValues> {
     update_tx: Sender<JobUpdate<T>>,
     pp_tx: Sender<ParserTask>,
     concurrency_profile: config::ConcurrencyProfile,
-    networking_profile: config::NetworkingProfileResolved
+    networking_profile: config::NetworkingProfile
 }
 
 pub struct Job<T: JobContextValues> {
@@ -163,7 +163,7 @@ pub trait JobRules<T: JobContextValues> {
 }
 
 impl<T: JobContextValues> MultiCrawler<T> {
-    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfileResolved) -> (MultiCrawler<T>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
+    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile) -> (MultiCrawler<T>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
         let (job_tx, job_rx) = bounded_ch::<Job<T>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<T>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {
