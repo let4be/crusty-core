@@ -12,6 +12,7 @@ use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
 use futures::Future;
 pub use select;
+pub use async_channel;
 
 #[derive(Error, Debug)]
 pub enum Error {
