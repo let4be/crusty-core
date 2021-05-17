@@ -57,8 +57,8 @@ impl<T: rt::JobContextValues> StatusFilter<T> for ContentTypeFilter {
 }
 
 impl ContentTypeFilter {
-    pub fn new(accepted: Vec<String>, reject_error: bool) -> Self {
-        Self {accepted, term_on_error: reject_error }
+    pub fn new(accepted: Vec<String>, term_on_error: bool) -> Self {
+        Self {accepted, term_on_error }
     }
 }
 

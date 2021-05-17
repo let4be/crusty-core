@@ -22,6 +22,77 @@ use std::{
 use futures::{future};
 use url::Url;
 
+pub trait JobRules<T: JobContextValues> {
+    fn task_filters(&self) -> Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>>;
+    fn status_filters(&self) -> Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>>;
+    fn load_filters(&self) -> Vec<Box<dyn load_filters::LoadFilter<T> + Send + Sync>>;
+    fn task_expanders(&self) -> Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>>;
+}
+
+pub struct DefaultCrawlingRules {
+    allow_www: bool,
+    page_budget: Option<usize>,
+    links_per_page_budget: Option<usize>,
+    max_level: Option<usize>,
+    accepted_content_types: Option<Vec<String>>,
+    redirect_term_on_err: Option<bool>
+}
+
+impl Default for DefaultCrawlingRules{
+    fn default() -> Self {
+        Self {
+            allow_www: true,
+            page_budget: Some(50),
+            links_per_page_budget: Some(50),
+            max_level: Some(10),
+            accepted_content_types: Some(vec![String::from("text/html")]),
+            redirect_term_on_err: Some(true)
+        }
+    }
+}
+
+impl<T: JobContextValues> JobRules<T> for DefaultCrawlingRules {
+    fn task_filters(&self) -> Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>> {
+        let mut filters : Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>> = vec![
+            Box::new(task_filters::SameDomainTaskFilter::new(self.allow_www)),
+            Box::new(task_filters::HashSetDedupTaskFilter::new()),
+        ];
+        if self.page_budget.is_some() {
+            filters.push(Box::new(task_filters::PageBudgetTaskFilter::new(self.page_budget.unwrap())));
+        }
+        if self.links_per_page_budget.is_some() {
+            filters.push(Box::new(task_filters::LinkPerPageBudgetTaskFilter::new(self.links_per_page_budget.unwrap())))
+        }
+        if self.max_level.is_some() {
+            filters.push(Box::new(task_filters::PageLevelTaskFilter::new(self.max_level.unwrap())))
+        }
+
+        filters
+    }
+
+    fn status_filters(&self) -> Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>> {
+        let mut filters: Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>> = vec![];
+        if self.accepted_content_types.is_some() {
+            filters.push(Box::new(status_filters::ContentTypeFilter::new(self.accepted_content_types.clone().unwrap(), true)));
+        }
+        if self.redirect_term_on_err.is_some() {
+            filters.push(Box::new(status_filters::RedirectStatusFilter::new(true)));
+        }
+        filters
+    }
+
+    fn load_filters(&self) -> Vec<Box<dyn load_filters::LoadFilter<T> + Send + Sync>> {
+        vec![]
+    }
+
+    fn task_expanders(&self, ) -> Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>> {
+        vec![
+            //Box::new(expanders::LoadImages::new()),
+            Box::new(expanders::FollowLinks::new()),
+        ]
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Crawler<R: Resolver> {
     url: Url,
@@ -164,13 +235,6 @@ pub struct Job<T: JobContextValues> {
     pub url: url::Url,
     pub settings: config::CrawlerSettings,
     pub rules: Box<dyn JobRules<T> + Send + Sync>,
-}
-
-pub trait JobRules<T: JobContextValues> {
-    fn task_filters(&self) -> Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>>;
-    fn status_filters(&self) -> Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>>;
-    fn load_filters(&self) -> Vec<Box<dyn load_filters::LoadFilter<T> + Send + Sync>>;
-    fn task_expanders(&self) -> Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>>;
 }
 
 impl<T: JobContextValues, R: Resolver> MultiCrawler<T, R> {
