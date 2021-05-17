@@ -155,17 +155,18 @@ impl<R: Resolver> Crawler<R> {
     }
 
     pub fn go<T: JobContextValues>(
-        &mut self,
+        &self,
         rules: Box<dyn JobRules<T> + Send + Sync>,
         parse_tx: Sender<ParserTask>,
         sub_tx: Sender<JobUpdate<T>>,
         ctx: StdJobContext<T>
     ) -> Result<PinnedFut>
     {
-        if self.resolver.is_none() {
-            self.resolver = Some(Arc::new(R::new_default().context("cannot create default resolver")?));
-        }
-        let resolver = self.resolver.clone().unwrap();
+        let resolver = if self.resolver.is_none() {
+            Some(Arc::new(R::new_default().context("cannot create default resolver")?))
+        } else {
+            self.resolver.clone()
+        }.unwrap();
 
         Ok(TracingTask::new(span!(Level::INFO, url=self.url.as_str()), async move {
             let mut scheduler = TaskScheduler::new(
