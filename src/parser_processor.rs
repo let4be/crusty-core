@@ -5,6 +5,8 @@ use crate::{
     config,
 };
 
+use tokio::task::JoinHandle;
+
 #[derive(Clone)]
 pub struct ParserProcessor {
     concurrency: usize,
@@ -45,16 +47,15 @@ impl ParserProcessor {
 
     pub async fn go(self) -> Result<()>
     {
-        for h in (0..self.concurrency).into_iter().map(|n|{
-            let h = std::thread::Builder::new().stack_size(self.stack_size_bytes).spawn({
-                let p = self.clone();
-                let n = n;
-                move || {
-                    let _ = futures_lite::future::block_on(p.process(n));
-                }
+        let handles : Vec<Result<std::thread::JoinHandle<()>>> = (0..self.concurrency).into_iter().map(|n|{
+            let thread_builder= std::thread::Builder::new().stack_size(self.stack_size_bytes);
+            let p = self.clone();
+            let h = thread_builder.spawn(move || {
+                let _ = futures_lite::future::block_on(p.process(n));
             }).context("cannot spawn parser processor thread")?;
             Ok::<_, Error>(h)
-        }) {
+        }).collect();
+        for h in handles {
             let _ = h?.join();
         }
         Ok(())
