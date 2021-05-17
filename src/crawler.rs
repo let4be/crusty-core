@@ -22,6 +22,7 @@ use std::{
 
 use futures::{future};
 use url::Url;
+use tokio::task::JoinHandle;
 
 pub type TaskFilters<JobState, TaskState> = Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>;
 pub type StatusFilters<JobState, TaskState> = Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>;
@@ -186,6 +187,19 @@ pub struct Crawler<JobState: JobStateValues, TaskState: TaskStateValues, R: Reso
     _ts: PhantomData<TaskState>
 }
 
+pub struct CrawlerIter<JobState: JobStateValues, TaskState: TaskStateValues>{
+    rx: Receiver<JobUpdate<JobState, TaskState>>,
+    h: JoinHandle<Result<()>>
+}
+
+impl<JobState: JobStateValues, TaskState: TaskStateValues> Iterator for CrawlerIter<JobState, TaskState> {
+    type Item = JobUpdate<JobState, TaskState>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        futures_lite::future::block_on(self.rx.recv()).ok()
+    }
+}
+
 impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver, RR: JobRules<JobState, TaskState>> Crawler<JobState, TaskState, R, RR> {
     pub fn new(settings: config::CrawlerSettings, networking_profile: config::NetworkingProfile<R>, rules: RR) -> Crawler<JobState, TaskState, R, RR> {
         Crawler {
@@ -195,6 +209,17 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver, RR: JobR
             _js: PhantomData::default(),
             _ts: PhantomData::default(),
         }
+    }
+
+    pub fn iter(self, url: Url, parse_tx: Sender<ParserTask>) -> Result<CrawlerIter<JobState, TaskState>> {
+        let (tx, rx) = async_channel::unbounded();
+
+        let h = tokio::spawn(async move {
+            self.go(url, parse_tx, tx)?.await?;
+            Ok::<_, Error>(())
+        });
+
+        Ok(CrawlerIter{rx, h})
     }
 
     pub fn go(

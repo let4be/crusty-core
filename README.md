@@ -18,7 +18,6 @@ use crusty_core::{
     CrawlingRulesOptions,
     Crawler,
     expanders::TaskExpander,
-    types::async_channel::Receiver,
     types,
     config,
 };
@@ -58,15 +57,6 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
     }
 }
 
-async fn process_responses(rx: Receiver<types::JobUpdate<JobState, TaskState>>) {
-    while let Ok(r) = rx.recv().await {
-        println!("- {}, task context: {:?}", r, r.context.task_state);
-        if let types::JobStatus::Finished(_) = r.status {
-            println!("final context: {:?}", r.context.job_state.lock().unwrap());
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let concurrency_profile = config::ConcurrencyProfile::default();
@@ -82,14 +72,15 @@ async fn main() -> Result<()> {
 
     let crawler = Crawler::<JobState, TaskState, _, _>::new(crawler_settings, networking_profile, rules);
 
-    let (update_tx, update_rx) = types::async_channel::unbounded();
-
-    let h_sub = tokio::spawn(process_responses(update_rx));
-
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    crawler.go(url, tx_pp, update_tx)?.await?;
+    for r in crawler.iter(url, tx_pp)? {
+        println!("- {}, task context: {:?}", r, r.context.task_state);
+        if let types::JobStatus::Finished(_) = r.status {
+            println!("final context: {:?}", r.context.job_state.lock().unwrap());
+        }
+    }
 
-    let _ = tokio::join!(h_pp, h_sub);
+    let _ = tokio::join!(h_pp);
     Ok(())
 }
 ```
