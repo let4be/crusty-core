@@ -1,21 +1,16 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::{
-    types::*,
-    config,
-    task_filters,
-};
+use crate::{types::*, config, task_filters, task_filters::TaskFilterResult, JobRules, TaskFilters};
 
 use std::sync::{Arc};
 
 use url::Url;
-use crate::task_filters::TaskFilterResult;
 
 pub(crate) struct TaskScheduler<JobState: JobStateValues, TaskState: TaskStateValues> {
+    task_filters: TaskFilters<JobState, TaskState>,
     settings: config::CrawlerSettings,
-    task_filters: Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>,
-
     job_ctx: StdJobContext<JobState, TaskState>,
+
     root_task: Task,
     task_seq_num: usize,
     pages_pending: usize,
@@ -24,16 +19,16 @@ pub(crate) struct TaskScheduler<JobState: JobStateValues, TaskState: TaskStateVa
     pub(crate) tasks_rx: Receiver<Vec<Task>>,
     pub(crate) job_update_tx: Sender<JobUpdate<JobState, TaskState>>,
     job_update_rx: Receiver<JobUpdate<JobState, TaskState>>,
-    sub_tx: Sender<JobUpdate<JobState, TaskState>>,
+    update_tx: Sender<JobUpdate<JobState, TaskState>>,
 }
 
 impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobState, TaskState> {
-    pub(crate) fn new(
+    pub(crate) fn new<R: JobRules<JobState, TaskState>>(
         url: &Url,
+        rules: Arc<R>,
         settings: &config::CrawlerSettings,
-        task_filters: Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>,
         job_context: StdJobContext<JobState, TaskState>,
-        sub_tx: Sender<JobUpdate<JobState, TaskState>>
+        update_tx: Sender<JobUpdate<JobState, TaskState>>
     ) -> Result<TaskScheduler<JobState, TaskState>> {
         let root_task = Task::new_root(&url)?;
 
@@ -42,7 +37,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobStat
 
         Ok(TaskScheduler {
             settings: settings.clone(),
-            task_filters,
+            task_filters: rules.task_filters(),
             job_ctx: job_context,
 
             root_task,
@@ -53,7 +48,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobStat
             tasks_rx,
             job_update_tx,
             job_update_rx,
-            sub_tx,
+            update_tx,
         })
     }
 
@@ -132,7 +127,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobStat
             }
         }
 
-        let _ = self.sub_tx.send(task_response).await;
+        let _ = self.update_tx.send(task_response).await;
     }
 
     pub(crate) fn go(&mut self) -> PinnedFut<JobUpdate<JobState, TaskState>> {

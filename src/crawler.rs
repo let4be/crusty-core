@@ -201,7 +201,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver, RR: JobR
         &self,
         url: Url,
         parse_tx: Sender<ParserTask>,
-        sub_tx: Sender<JobUpdate<JobState, TaskState>>,
+        update_tx: Sender<JobUpdate<JobState, TaskState>>,
     ) -> Result<PinnedFut>
     {
         let resolver = if self.networking_profile.resolver.is_none() {
@@ -215,10 +215,10 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver, RR: JobR
 
             let mut scheduler = TaskScheduler::new(
                 &url,
+                Arc::clone(&self.rules),
                 &self.settings,
-                self.rules.task_filters(),
                 ctx.clone(),
-                sub_tx.clone()
+                update_tx.clone()
             )?;
 
             let client_factory = HttpClientFactory {
@@ -236,10 +236,8 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver, RR: JobR
 
                 let mut processor = TaskProcessor::new(
                     &url,
+                    Arc::clone(&self.rules),
                     &self.settings,
-                    self.rules.status_filters(),
-                    self.rules.load_filters(),
-                    self.rules.task_expanders(),
                     ctx.clone(),
                     scheduler.job_update_tx.clone(),
                     scheduler.tasks_rx.clone(),
@@ -259,7 +257,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver, RR: JobR
             futures::future::join_all(processor_handles).await;
             trace!("Workers are done - sending notification about job done!");
 
-            let _ = sub_tx.send(job_finishing_update).await;
+            let _ = update_tx.send(job_finishing_update).await;
             Ok(())
         }).instrument())
     }

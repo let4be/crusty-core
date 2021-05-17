@@ -1,20 +1,15 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::{
-    types::*,
-    config,
-    status_filters,
-    load_filters,
-    expanders,
-    hyper_utils,
-};
+use crate::{types::*, config, status_filters, load_filters, hyper_utils, JobRules, StatusFilters, LoadFilters, TaskExpanders};
 
-use std::sync::{Arc};
+use std::{
+    sync::{Arc},
+    str::FromStr
+};
 
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
-use std::str::FromStr;
 use url::Url;
 
 pub(crate) trait LikeHttpConnector: hyper::client::connect::Connect + Clone + Send + Sync + 'static {}
@@ -24,10 +19,10 @@ pub(crate) type ClientFactory<C> = Box<dyn Fn() -> (hyper::Client<C>, hyper_util
 
 pub(crate) struct TaskProcessor<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector> {
     url: Url,
+    status_filters: StatusFilters<JobState, TaskState>,
+    load_filters: LoadFilters<JobState, TaskState>,
+    task_expanders: Arc<TaskExpanders<JobState, TaskState>>,
     settings: config::CrawlerSettings,
-    status_filters: Arc<Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>>,
-    load_filters: Arc<Vec<Box<dyn load_filters::LoadFilter<JobState, TaskState> + Send + Sync>>>,
-    expanders: Arc<Vec<Box<dyn expanders::TaskExpander<JobState, TaskState> + Send + Sync>>>,
     job_ctx: StdJobContext<JobState, TaskState>,
 
     tx: Sender<JobUpdate<JobState, TaskState>>,
@@ -38,12 +33,10 @@ pub(crate) struct TaskProcessor<JobState: JobStateValues, TaskState: TaskStateVa
 
 impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector> TaskProcessor<JobState, TaskState, C>
 {
-    pub(crate) fn new(
+    pub(crate) fn new<R: JobRules<JobState, TaskState>>(
         url: &Url,
+        rules: Arc<R>,
         settings: &config::CrawlerSettings,
-        status_filters: Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>,
-        load_filters: Vec<Box<dyn load_filters::LoadFilter<JobState, TaskState> + Send + Sync>>,
-        expanders: Vec<Box<dyn expanders::TaskExpander<JobState, TaskState> + Send + Sync>>,
         job_context: StdJobContext<JobState, TaskState>,
         tx: Sender<JobUpdate<JobState, TaskState>>,
         tasks_rx: Receiver<Vec<Task>>,
@@ -52,10 +45,10 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector>
     ) -> TaskProcessor<JobState, TaskState, C> {
         TaskProcessor {
             url: url.clone(),
+            status_filters: rules.status_filters(),
+            load_filters: rules.load_filters(),
+            task_expanders: Arc::new(rules.task_expanders()),
             settings: settings.clone(),
-            status_filters: Arc::new(status_filters),
-            load_filters: Arc::new(load_filters),
-            expanders: Arc::new(expanders),
             job_ctx: job_context,
             tx,
             tasks_rx,
@@ -208,7 +201,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector>
 
         let payload = {
             let task = Arc::clone(&task);
-            let expanders = Arc::clone(&self.expanders);
+            let task_expanders = Arc::clone(&self.task_expanders);
             let mut job_ctx = self.job_ctx.clone();
 
             move || -> Result<FollowData> {
@@ -216,7 +209,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector>
 
                 let document = select::document::Document::from_read(reader).context("cannot read html document")?;
 
-                for h in expanders.iter() {
+                for h in task_expanders.iter() {
                     h.expand(&mut job_ctx, &task, &status, &document);
                 }
 
