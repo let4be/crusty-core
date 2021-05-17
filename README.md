@@ -1,6 +1,7 @@
 # Crusty-core - build your own web crawler!
  - multi-threaded && async, written in 100% rust
  - highly customizable filtering at each and every step - status code/headers received, page downloaded, link filter
+ - built on top of [hyper](https://github.com/hyperium/hyper) for additional speed and customizability  
  - rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
  - lots of options, almost everything is configurable
  - applicable both for focused and broad crawling
