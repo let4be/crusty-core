@@ -1,5 +1,5 @@
 # Crusty-core - build your own web crawler!
- - multi-threaded && async, written in 100% rust
+ - written in 100% rust, multi-threaded && async on top of [tokio](https://github.com/tokio-rs/tokio)
  - highly customizable filtering at each and every step - status code/headers received, page downloaded, link filter
  - built on top of [hyper](https://github.com/hyperium/hyper) for additional speed and customizability  
  - rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
