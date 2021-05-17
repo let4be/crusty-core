@@ -156,7 +156,7 @@ pub struct MultiCrawler<T: JobContextValues, R: Resolver> {
     pp_tx: Sender<ParserTask>,
     concurrency_profile: config::ConcurrencyProfile,
     networking_profile: config::NetworkingProfile,
-    resolver: Arc<R>,
+    resolver: Option<Arc<R>>,
 }
 
 pub struct Job<T: JobContextValues> {
@@ -174,7 +174,7 @@ pub trait JobRules<T: JobContextValues> {
 }
 
 impl<T: JobContextValues, R: Resolver> MultiCrawler<T, R> {
-    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile, resolver: R) -> (MultiCrawler<T, R>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
+    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile) -> (MultiCrawler<T, R>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
         let (job_tx, job_rx) = bounded_ch::<Job<T>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<T>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {
@@ -183,14 +183,20 @@ impl<T: JobContextValues, R: Resolver> MultiCrawler<T, R> {
             pp_tx,
             concurrency_profile,
             networking_profile,
-            resolver: Arc::new(resolver)
+            resolver: None,
         }, job_tx, update_rx)
+    }
+
+    pub fn set_name_resolver(&mut self, r: Arc<R>) {
+        self.resolver = Some(r);
     }
 
     async fn process(&self) -> Result<()> {
         while let Ok(job) = self.job_rx.recv().await {
             let mut crawler = Crawler::new(job.url.clone(), job.settings.clone(), self.networking_profile.clone());
-            crawler.set_name_resolver(Arc::clone(&self.resolver));
+            if self.resolver.is_some() {
+                crawler.set_name_resolver(self.resolver.clone().unwrap());
+            }
             let _ = crawler.go(job.rules, self.pp_tx.clone(), self.update_tx.clone(), job.ctx)?.await;
         }
         Ok(())
