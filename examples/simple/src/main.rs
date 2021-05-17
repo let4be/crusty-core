@@ -1,12 +1,3 @@
-# Crusty - Crawler Essentials, multi-threaded && async, 100% rust
-
-Small and fairly universal library for performing web crawling in Rust, 
-
-with special focus on full customization(custom handling for status, page loading, content grabbing, url filtering) and speed. Applicable both for focused and broad crawling
-
-## Example - crawl single website, collect information about `TITLE` tags 
-
-```rust
 use crusty_core::{
     ParserProcessor,
     CrawlingRules,
@@ -87,7 +78,3 @@ async fn main() -> Result<()> {
     let _ = tokio::join!(h_pp, h_sub);
     Ok(())
 }
-```
-
-Please see [examples](examples) for more complicated usage scenarios. 
-This crawler is way more verbose than some others, but it allows incredible customization at each and every step.

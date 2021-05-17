@@ -185,7 +185,7 @@ pub struct ParserResponse {
 }
 
 pub trait JobStateValues: Send + Sync + Clone + Default + 'static {
-    fn finalize(&mut self);
+    fn finalize(&mut self){}
 }
 
 pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {
