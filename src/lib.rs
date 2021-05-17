@@ -14,4 +14,4 @@ pub mod task_filters;
 pub mod expanders;
 pub mod types;
 mod hyper_utils;
-mod resolver;
+pub mod resolver;

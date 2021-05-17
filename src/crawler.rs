@@ -10,7 +10,8 @@ use crate::{
     status_filters,
     load_filters,
     expanders,
-    resolver::AsyncHyperResolver
+    resolver::AsyncHyperResolverAdaptor,
+    resolver::Resolver
 };
 
 use std::{
@@ -20,30 +21,30 @@ use std::{
 
 use futures::{future};
 use url::Url;
-use anyhow::{anyhow};
-
 
 #[derive(Clone, Debug)]
-pub struct Crawler {
+pub struct Crawler<R: Resolver> {
     url: Url,
     settings: config::CrawlerSettings,
-    networking_profile: config::NetworkingProfile
+    networking_profile: config::NetworkingProfile,
+    resolver: Option<Arc<R>>
 }
 
 #[derive(Clone)]
-struct HttpClientFactory {
+struct HttpClientFactory<R: Resolver> {
     settings: config::CrawlerSettings,
     addr_ipv4: Option<Ipv4Addr>,
     addr_ipv6: Option<Ipv6Addr>,
-    resolver: AsyncHyperResolver,
+    resolver: Arc<R>,
 }
 
-type HttpClient = hyper::Client<HttpConnector>;
-type HttpConnector = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<AsyncHyperResolver>>>;
+type HttpClient<R> = hyper::Client<HttpConnector<R>>;
+type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<AsyncHyperResolverAdaptor<R>>>>;
 
-impl HttpClientFactory {
-    fn make(&self) -> (HttpClient, hyper_utils::Stats) {
-        let mut http = hyper::client::HttpConnector::new_with_resolver(self.resolver.clone());
+impl<R: Resolver> HttpClientFactory<R> {
+    fn make(&self) -> (HttpClient<R>, hyper_utils::Stats) {
+        let resolver = AsyncHyperResolverAdaptor::new(self.resolver.clone());
+        let mut http = hyper::client::HttpConnector::new_with_resolver(resolver);
         http.set_connect_timeout(self.settings.connect_timeout.clone().map(|v| *v));
 
         if self.addr_ipv4.is_some() ^ self.addr_ipv6.is_some() {
@@ -68,25 +69,34 @@ impl HttpClientFactory {
     }
 }
 
-impl Crawler {
-    pub fn new(url: Url, settings: config::CrawlerSettings, networking_profile: config::NetworkingProfile) -> Crawler {
+impl<R: Resolver> Crawler<R> {
+    pub fn new(url: Url, settings: config::CrawlerSettings, networking_profile: config::NetworkingProfile) -> Crawler<R> {
         Crawler {
             url,
             settings,
-            networking_profile
+            networking_profile,
+            resolver: None,
         }
     }
 
+    pub fn set_name_resolver(&mut self, r: Arc<R>) {
+        self.resolver = Some(r);
+    }
+
     pub fn go<T: JobContextValues>(
-        &self,
+        &mut self,
         rules: Box<dyn JobRules<T> + Send + Sync>,
         parse_tx: Sender<ParserTask>,
         sub_tx: Sender<JobUpdate<T>>,
-        ctx: StdJobContext<T>,
-        resolver: AsyncHyperResolver
-    ) -> PinnedFut
+        ctx: StdJobContext<T>
+    ) -> Result<PinnedFut>
     {
-        TracingTask::new(span!(Level::INFO, url=self.url.as_str()), async move {
+        if self.resolver.is_none() {
+            self.resolver = Some(Arc::new(R::new_default().context("cannot create default resolver")?));
+        }
+        let resolver = self.resolver.clone().unwrap();
+
+        Ok(TracingTask::new(span!(Level::INFO, url=self.url.as_str()), async move {
             let mut scheduler = TaskScheduler::new(
                 &self.url,
                 &self.settings,
@@ -97,14 +107,14 @@ impl Crawler {
 
             let client_factory = HttpClientFactory {
                 settings: self.settings.clone(),
-                resolver: resolver.clone(),
+                resolver: Arc::clone(&resolver),
                 addr_ipv4: self.networking_profile.bind_local_ipv4.clone().map(|v|*v),
                 addr_ipv6: self.networking_profile.bind_local_ipv6.clone().map(|v|*v),
             };
 
             let mut processor_handles = vec![];
             for i in 0..self.settings.concurrency {
-                let client_factory = (|cf: HttpClientFactory|
+                let client_factory = (move |cf: HttpClientFactory<R>|
                     Box::new(move || cf.make())
                 )(client_factory.clone());
 
@@ -135,17 +145,18 @@ impl Crawler {
 
             let _ = sub_tx.send(job_finishing_update).await;
             Ok(())
-        }).instrument()
+        }).instrument())
     }
 }
 
 #[derive(Clone)]
-pub struct MultiCrawler<T: JobContextValues> {
+pub struct MultiCrawler<T: JobContextValues, R: Resolver> {
     job_rx: Receiver<Job<T>>,
     update_tx: Sender<JobUpdate<T>>,
     pp_tx: Sender<ParserTask>,
     concurrency_profile: config::ConcurrencyProfile,
-    networking_profile: config::NetworkingProfile
+    networking_profile: config::NetworkingProfile,
+    resolver: Arc<R>,
 }
 
 pub struct Job<T: JobContextValues> {
@@ -162,8 +173,8 @@ pub trait JobRules<T: JobContextValues> {
     fn task_expanders(&self) -> Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>>;
 }
 
-impl<T: JobContextValues> MultiCrawler<T> {
-    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile) -> (MultiCrawler<T>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
+impl<T: JobContextValues, R: Resolver> MultiCrawler<T, R> {
+    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile, resolver: R) -> (MultiCrawler<T, R>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
         let (job_tx, job_rx) = bounded_ch::<Job<T>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<T>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {
@@ -171,34 +182,29 @@ impl<T: JobContextValues> MultiCrawler<T> {
             update_tx,
             pp_tx,
             concurrency_profile,
-            networking_profile
+            networking_profile,
+            resolver: Arc::new(resolver)
         }, job_tx, update_rx)
     }
 
-    async fn process(&self, resolver: AsyncHyperResolver) {
+    async fn process(&self) -> Result<()> {
         while let Ok(job) = self.job_rx.recv().await {
-            let crawler = Crawler::new(job.url.clone(), job.settings.clone(), self.networking_profile.clone());
-            let _ = crawler.go(job.rules, self.pp_tx.clone(), self.update_tx.clone(), job.ctx, resolver.clone()).await;
+            let mut crawler = Crawler::new(job.url.clone(), job.settings.clone(), self.networking_profile.clone());
+            crawler.set_name_resolver(Arc::clone(&self.resolver));
+            let _ = crawler.go(job.rules, self.pp_tx.clone(), self.update_tx.clone(), job.ctx)?.await;
         }
+        Ok(())
     }
 
     pub fn go(self) -> PinnedFut<'static> {
         TracingTask::new(span!(Level::INFO), async move {
-            let resolver = AsyncHyperResolver::new_from_system_conf();
-            if resolver.is_err() {
-                return Err(anyhow!("Cannot initialize async dns resolver: {}", resolver.err().unwrap()).into());
-            }
-            let resolver = resolver.unwrap();
-
             let mut handles = vec![];
-            let s = Arc::new(self);
-
-            for _ in 0..s.concurrency_profile.domain_concurrency {
+            for _ in 0..self.concurrency_profile.domain_concurrency {
                 let h = tokio::spawn({
-                    let mc = s.clone();
-                    let resolver = resolver.clone();
+                    let s = self.clone();
                     async move {
-                        mc.process(resolver).await;
+                        s.process().await?;
+                        Ok::<_, Error>(())
                     }
                 });
                 handles.push(h);
