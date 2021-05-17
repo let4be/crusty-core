@@ -15,10 +15,10 @@ pub struct ParserProcessor {
 }
 
 impl ParserProcessor {
-    pub fn new(concurrency: usize, stack_size_bytes: usize, concurrency_profile: config::ConcurrencyProfile) -> (Self, Sender<ParserTask>) {
+    pub fn new(concurrency_profile: config::ConcurrencyProfile, stack_size_bytes: usize) -> (Self, Sender<ParserTask>) {
         let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size() );
 
-        (Self {concurrency, stack_size_bytes, rx}, tx)
+        (Self {concurrency: concurrency_profile.parser_concurrency, stack_size_bytes, rx}, tx)
     }
 
     fn process(&self, _n: usize) -> Result<()> {

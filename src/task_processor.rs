@@ -22,34 +22,34 @@ impl<T: hyper::client::connect::Connect + Clone + Send + Sync + 'static> LikeHtt
 
 pub(crate) type ClientFactory<C> = Box<dyn Fn() -> (hyper::Client<C>, hyper_utils::Stats) + Send + Sync + 'static>;
 
-pub(crate) struct TaskProcessor<T: JobContextValues, C: LikeHttpConnector> {
+pub(crate) struct TaskProcessor<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector> {
     url: Url,
     settings: config::CrawlerSettings,
-    status_filters: Arc<Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>>>,
-    load_filters: Arc<Vec<Box<dyn load_filters::LoadFilter<T> + Send + Sync>>>,
-    expanders: Arc<Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>>>,
-    job_ctx: StdJobContext<T>,
+    status_filters: Arc<Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>>,
+    load_filters: Arc<Vec<Box<dyn load_filters::LoadFilter<JobState, TaskState> + Send + Sync>>>,
+    expanders: Arc<Vec<Box<dyn expanders::TaskExpander<JobState, TaskState> + Send + Sync>>>,
+    job_ctx: StdJobContext<JobState, TaskState>,
 
-    tx: Sender<JobUpdate<T>>,
+    tx: Sender<JobUpdate<JobState, TaskState>>,
     tasks_rx: Receiver<Vec<Task>>,
     parse_tx: Sender<ParserTask>,
     client_factory: ClientFactory<C>,
 }
 
-impl<T: JobContextValues, C: LikeHttpConnector> TaskProcessor<T, C>
+impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector> TaskProcessor<JobState, TaskState, C>
 {
     pub(crate) fn new(
         url: &Url,
         settings: &config::CrawlerSettings,
-        status_filters: Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>>,
-        load_filters: Vec<Box<dyn load_filters::LoadFilter<T> + Send + Sync>>,
-        expanders: Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>>,
-        job_context: StdJobContext<T>,
-        tx: Sender<JobUpdate<T>>,
+        status_filters: Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>,
+        load_filters: Vec<Box<dyn load_filters::LoadFilter<JobState, TaskState> + Send + Sync>>,
+        expanders: Vec<Box<dyn expanders::TaskExpander<JobState, TaskState> + Send + Sync>>,
+        job_context: StdJobContext<JobState, TaskState>,
+        tx: Sender<JobUpdate<JobState, TaskState>>,
         tasks_rx: Receiver<Vec<Task>>,
         parse_tx: Sender<ParserTask>,
         client_factory: ClientFactory<C>,
-    ) -> TaskProcessor<T, C> {
+    ) -> TaskProcessor<JobState, TaskState, C> {
         TaskProcessor {
             url: url.clone(),
             settings: settings.clone(),
@@ -293,10 +293,12 @@ impl<T: JobContextValues, C: LikeHttpConnector> TaskProcessor<T, C>
                     let t = Arc::new(task);
                     tokio::select! {
                         status = self.process_task(Arc::clone(&t), &client, &stats) => {
+                            let ctx = self.job_ctx.clone();
+
                             let _ = self.tx.send(JobUpdate {
                                 task: Arc::clone(&t),
                                 status,
-                                context: self.job_ctx.clone(),
+                                context: ctx,
                             }).await;
                         }
                         _ = timeout => break

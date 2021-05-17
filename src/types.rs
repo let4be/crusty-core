@@ -166,10 +166,10 @@ pub struct Task {
     pub level: usize,
 }
 
-pub struct JobUpdate<T: JobContextValues> {
+pub struct JobUpdate<JobState: JobStateValues, TaskState: TaskStateValues> {
     pub task: Arc<Task>,
     pub status: JobStatus,
-    pub context: StdJobContext<T>
+    pub context: StdJobContext<JobState, TaskState>
 }
 
 pub struct ParserTask {
@@ -184,23 +184,31 @@ pub struct ParserResponse {
     pub work_time: Duration
 }
 
-pub trait JobContextValues: Send + Sync + Clone + 'static {
+pub trait JobStateValues: Send + Sync + Clone + Default + 'static {
+    fn finalize(&mut self);
 }
 
+pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {
+}
+
+impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
+
 #[derive(Clone)]
-pub struct StdJobContext<T> {
+pub struct StdJobContext<JobState, TaskState> {
     pub started_at : Instant,
     pub root_url : Url,
-    pub values : Arc<Mutex<T>>,
+    pub job_state: Arc<Mutex<JobState>>,
+    pub task_state: Arc<Mutex<TaskState>>,
     links: Vec<Link>
 }
 
-impl<T: JobContextValues> StdJobContext<T> {
-    pub fn new(root_url: Url, values: T) -> Self {
+impl<JobState: JobStateValues, TaskState: TaskStateValues> StdJobContext<JobState, TaskState> {
+    pub fn new(root_url: Url, job_state: JobState, task_state: TaskState) -> Self {
         Self {
             started_at: Instant::now(),
             root_url,
-            values: Arc::new(Mutex::new(values)),
+            job_state: Arc::new(Mutex::new(job_state)),
+            task_state: Arc::new(Mutex::new(task_state)),
             links: vec![],
         }
     }
@@ -303,7 +311,7 @@ impl Task {
     }
 }
 
-impl<T: JobContextValues> fmt::Display for JobUpdate<T> {
+impl<T: JobStateValues, TT: TaskStateValues> fmt::Display for JobUpdate<T,TT> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.status {
             JobStatus::Processing(ref r) => {

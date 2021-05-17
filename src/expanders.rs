@@ -2,10 +2,10 @@
 use crate::prelude::*;
 use crate::types as rt;
 
-pub trait TaskExpander<T: rt::JobContextValues> {
+pub trait TaskExpander<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> {
     fn expand(
         &self,
-        ctx: &mut rt::StdJobContext<T>,
+        ctx: &mut rt::StdJobContext<JobState, TaskState>,
         task: &rt::Task,
         status: &rt::Status,
         document: &select::document::Document,
@@ -14,10 +14,10 @@ pub trait TaskExpander<T: rt::JobContextValues> {
 
 pub struct FollowLinks {}
 
-impl<T: rt::JobContextValues> TaskExpander<T> for FollowLinks {
+impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskExpander<JobState, TaskState> for FollowLinks {
     fn expand(
         &self,
-        ctx: &mut rt::StdJobContext<T>,
+        ctx: &mut rt::StdJobContext<JobState, TaskState>,
         task: &rt::Task,
         _status: &rt::Status,
         document: &select::document::Document,
@@ -45,10 +45,10 @@ impl FollowLinks {
 
 pub struct LoadImages {}
 
-impl<T: rt::JobContextValues> TaskExpander<T> for LoadImages {
+impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskExpander<JobState, TaskState> for LoadImages {
     fn expand(
         &self,
-        ctx: &mut rt::StdJobContext<T>,
+        ctx: &mut rt::StdJobContext<JobState, TaskState>,
         task: &rt::Task,
         _status: &rt::Status,
         document: &select::document::Document,

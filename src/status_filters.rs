@@ -7,11 +7,11 @@ pub enum StatusFilterAction {
     Term,
 }
 
-pub trait StatusFilter<T: rt::JobContextValues> {
+pub trait StatusFilter<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,
-        ctx: &mut rt::StdJobContext<T>,
+        ctx: &mut rt::StdJobContext<JobState, TaskState>,
         task: &rt::Task,
         status: &rt::Status,
     ) -> StatusFilterAction;
@@ -22,11 +22,11 @@ pub struct ContentTypeFilter {
     term_on_error: bool
 }
 
-impl<T: rt::JobContextValues> StatusFilter<T> for ContentTypeFilter {
+impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> StatusFilter<JobState, TaskState> for ContentTypeFilter {
     fn name(&self) -> &'static str { "ContentTypeFilter" }
     fn accept(
         &self,
-        _ctx: &mut rt::StdJobContext<T>,
+        _ctx: &mut rt::StdJobContext<JobState, TaskState>,
         _task: &rt::Task,
         status: &rt::Status,
     ) -> StatusFilterAction {
@@ -66,11 +66,11 @@ pub struct RedirectStatusFilter {
     term_on_error: bool
 }
 
-impl<T: rt::JobContextValues> StatusFilter<T> for RedirectStatusFilter {
+impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> StatusFilter<JobState, TaskState> for RedirectStatusFilter {
     fn name(&self) -> &'static str { "RedirectLoadFilter" }
     fn accept(
         &self,
-        ctx: &mut rt::StdJobContext<T>,
+        ctx: &mut rt::StdJobContext<JobState, TaskState>,
         task: &rt::Task,
         status: &rt::Status,
     ) -> StatusFilterAction {

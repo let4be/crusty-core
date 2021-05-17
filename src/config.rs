@@ -15,6 +15,7 @@ use std::{
 
 use serde::{Deserialize, Serialize, Deserializer, de};
 
+
 #[derive(Clone, Debug)]
 pub struct CLevel(pub Level);
 
@@ -122,13 +123,16 @@ impl<'de> Deserialize<'de> for CDuration {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConcurrencyProfile {
+    pub parser_concurrency: usize,
     pub domain_concurrency: usize,
 }
 
 impl Default for ConcurrencyProfile {
     fn default() -> Self {
+        let physical_cores = num_cpus::get_physical();
         Self {
-            domain_concurrency: 750,
+            parser_concurrency: physical_cores,
+            domain_concurrency: physical_cores * 30,
         }
     }
 }

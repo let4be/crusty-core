@@ -9,34 +9,35 @@ use crate::{
 use std::sync::{Arc};
 
 use url::Url;
+use crate::task_filters::TaskFilterResult;
 
-pub(crate) struct TaskScheduler<T: JobContextValues> {
+pub(crate) struct TaskScheduler<JobState: JobStateValues, TaskState: TaskStateValues> {
     settings: config::CrawlerSettings,
-    task_filters: Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>>,
+    task_filters: Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>,
 
-    job_ctx: StdJobContext<T>,
+    job_ctx: StdJobContext<JobState, TaskState>,
     root_task: Task,
     task_seq_num: usize,
     pages_pending: usize,
 
     tasks_tx: Sender<Vec<Task>>,
     pub(crate) tasks_rx: Receiver<Vec<Task>>,
-    pub(crate) job_update_tx: Sender<JobUpdate<T>>,
-    job_update_rx: Receiver<JobUpdate<T>>,
-    sub_tx: Sender<JobUpdate<T>>,
+    pub(crate) job_update_tx: Sender<JobUpdate<JobState, TaskState>>,
+    job_update_rx: Receiver<JobUpdate<JobState, TaskState>>,
+    sub_tx: Sender<JobUpdate<JobState, TaskState>>,
 }
 
-impl<T: JobContextValues> TaskScheduler<T> {
+impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobState, TaskState> {
     pub(crate) fn new(
         url: &Url,
         settings: &config::CrawlerSettings,
-        task_filters: Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>>,
-        job_context: StdJobContext<T>,
-        sub_tx: Sender<JobUpdate<T>>
-    ) -> Result<TaskScheduler<T>> {
+        task_filters: Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>,
+        job_context: StdJobContext<JobState, TaskState>,
+        sub_tx: Sender<JobUpdate<JobState, TaskState>>
+    ) -> Result<TaskScheduler<JobState, TaskState>> {
         let root_task = Task::new_root(&url)?;
 
-        let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<T>>();
+        let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JobState, TaskState>>();
         let (tasks_tx, tasks_rx) = unbounded_ch::<Vec<Task>>();
 
         Ok(TaskScheduler {
@@ -68,11 +69,19 @@ impl<T: JobContextValues> TaskScheduler<T> {
             match filter.accept(&mut self.job_ctx, self.task_seq_num, task) {
                 task_filters::TaskFilterResult::Accept => continue,
                 task_filters::TaskFilterResult::Skip => {
-                    trace!(action = "skip", filter_name = filter.name(), action);
+                    if task.is_root() {
+                        warn!(action = "skip", filter_name = filter.name(), action);
+                    } else {
+                        trace!(action = "skip", filter_name = filter.name(), action);
+                    }
                     return task_filters::TaskFilterResult::Skip
                 },
                 task_filters::TaskFilterResult::Term => {
-                    trace!(action = "term", filter_name = filter.name(), action);
+                    if task.is_root() {
+                        warn!(action = "term", filter_name = filter.name(), action);
+                    } else {
+                        trace!(action = "term", filter_name = filter.name(), action);
+                    }
                     return task_filters::TaskFilterResult::Term
                 },
             }
@@ -82,7 +91,7 @@ impl<T: JobContextValues> TaskScheduler<T> {
         task_filters::TaskFilterResult::Accept
     }
 
-    async fn process_task_response(&mut self, task_response: JobUpdate<T>, ignore_links: bool) {
+    async fn process_task_response(&mut self, task_response: JobUpdate<JobState, TaskState>, ignore_links: bool) {
         self.pages_pending -= 1;
         self.task_seq_num += 1;
 
@@ -126,7 +135,7 @@ impl<T: JobContextValues> TaskScheduler<T> {
         let _ = self.sub_tx.send(task_response).await;
     }
 
-    pub(crate) fn go(&mut self) -> PinnedFut<JobUpdate<T>> {
+    pub(crate) fn go(&mut self) -> PinnedFut<JobUpdate<JobState, TaskState>> {
         TracingTask::new(span!(Level::INFO), async move {
             trace!(
                 soft_timeout_ms = self.settings.job_soft_timeout.as_millis() as u32,
@@ -134,7 +143,10 @@ impl<T: JobContextValues> TaskScheduler<T> {
                 "Starting..."
             );
 
-            self.schedule(vec![self.root_task.clone()]).await;
+            let root_task= self.root_task.clone();
+            if self.schedule_filter(&root_task) == TaskFilterResult::Accept {
+                self.schedule(vec![root_task]).await;
+            }
 
             let mut is_soft_timeout = false;
             let mut is_hard_timeout = false;
@@ -165,10 +177,15 @@ impl<T: JobContextValues> TaskScheduler<T> {
             } else {
                 None
             };
+            let ctx = self.job_ctx.clone();
+            {
+                let mut job_state = ctx.job_state.lock().unwrap();
+                job_state.finalize();
+            }
             Ok(JobUpdate {
                 task: Arc::new(self.root_task.clone()),
                 status: JobStatus::Finished(JobData { err }),
-                context: self.job_ctx.clone(),
+                context: ctx,
             })
         }).instrument()
     }
