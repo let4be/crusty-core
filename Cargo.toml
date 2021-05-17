@@ -1,6 +1,6 @@
 [package]
 name = "crusty-core"
-version = "0.1.99"
+version = "0.1.100"
 authors = ["Sergey F. <let4be@gmail.com>"]
 edition = "2018"
 
@@ -14,7 +14,7 @@ debug-assertions = false
 opt-level = 3
 
 [dependencies]
-tracing-tools = {version = "~0.1.10", git = "https://github.com/let4be/tracing-tools", branch = "main"}
+tracing-tools = {version = "~0.1.12", git = "https://github.com/let4be/tracing-tools", branch = "main"}
 futures = "~0.3.13"
 tokio = { version = "~1.5.0", features = ["full"] }
 hyper = {version = "~0.14.7", features = ["full"] }

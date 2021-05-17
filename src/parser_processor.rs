@@ -40,7 +40,6 @@ impl ParserProcessor {
             }));
         }
 
-        info!("Finished...");
         Ok(())
     }
 
