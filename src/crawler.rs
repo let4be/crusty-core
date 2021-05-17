@@ -21,6 +21,7 @@ use std::{
 
 use futures::{future};
 use url::Url;
+use crate::resolver::AsyncHyperResolver;
 
 pub trait JobRules<T: JobContextValues> {
     fn task_filters(&self) -> Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>>;
@@ -94,7 +95,7 @@ impl<T: JobContextValues> JobRules<T> for DefaultCrawlingRules {
 }
 
 #[derive(Clone, Debug)]
-pub struct Crawler<R: Resolver> {
+pub struct Crawler<R: Resolver=AsyncHyperResolver> {
     url: Url,
     settings: config::CrawlerSettings,
     networking_profile: config::NetworkingProfile,
