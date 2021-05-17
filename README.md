@@ -1,4 +1,4 @@
-# Crusty
+# Crusty-core - build your own web crawler!
  - multi-threaded && async, written in 100% rust
  - highly customizable filtering at each and every step - status code, page loading, url expansion
  - lots of options, almost everything is configurable  
