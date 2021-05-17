@@ -1,9 +1,10 @@
 # Crusty-core - build your own web crawler!
  - multi-threaded && async, written in 100% rust
- - highly customizable filtering at each and every step - status code, page loading, url expansion
- - lots of options, almost everything is configurable  
+ - highly customizable filtering at each and every step - status code/headers received, page downloaded, link filter
  - rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
+ - lots of options, almost everything is configurable
  - applicable both for focused and broad crawling
+ - scales with ease when you want to crawl millions/billions of domains
  - it's fast, fast, fast!
 
 ### Example - crawl single website, collect information about `TITLE` tags 
