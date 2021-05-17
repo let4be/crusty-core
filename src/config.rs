@@ -1,11 +1,16 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
+use crate::{
+    resolver::AsyncHyperResolver,
+    resolver::Resolver
+};
 
 use std::{
     fmt, collections::HashMap,
     net::{Ipv4Addr, Ipv6Addr},
     ops::Deref,
-    str::FromStr
+    str::FromStr,
+    sync::Arc
 };
 
 use serde::{Deserialize, Serialize, Deserializer, de};
@@ -128,10 +133,19 @@ impl Default for ConcurrencyProfile {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
-pub struct NetworkingProfile {
+#[derive(Clone, Debug, Deserialize)]
+pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
     pub bind_local_ipv4: Option<CIP4Addr>,
-    pub bind_local_ipv6: Option<CIP6Addr>
+    pub bind_local_ipv6: Option<CIP6Addr>,
+
+    #[serde(skip)]
+    pub resolver: Option<Arc<R>>
+}
+
+impl Default for NetworkingProfile {
+    fn default() -> Self {
+        Self{bind_local_ipv4: None, bind_local_ipv6: None, resolver: None}
+    }
 }
 
 impl ConcurrencyProfile {

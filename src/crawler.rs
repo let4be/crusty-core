@@ -21,16 +21,17 @@ use std::{
 
 use futures::{future};
 use url::Url;
-use crate::resolver::AsyncHyperResolver;
+use std::marker::PhantomData;
 
-pub trait JobRules<T: JobContextValues> {
+pub trait JobRules<T: JobContextValues>: Clone + Send + Sync + 'static {
     fn task_filters(&self) -> Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>>;
     fn status_filters(&self) -> Vec<Box<dyn status_filters::StatusFilter<T> + Send + Sync>>;
     fn load_filters(&self) -> Vec<Box<dyn load_filters::LoadFilter<T> + Send + Sync>>;
     fn task_expanders(&self) -> Vec<Box<dyn expanders::TaskExpander<T> + Send + Sync>>;
 }
 
-pub struct DefaultCrawlingRules {
+#[derive(Clone)]
+pub struct CrawlingRules {
     allow_www: bool,
     page_budget: Option<usize>,
     links_per_page_budget: Option<usize>,
@@ -39,7 +40,7 @@ pub struct DefaultCrawlingRules {
     redirect_term_on_err: Option<bool>
 }
 
-impl Default for DefaultCrawlingRules{
+impl Default for CrawlingRules{
     fn default() -> Self {
         Self {
             allow_www: true,
@@ -52,7 +53,7 @@ impl Default for DefaultCrawlingRules{
     }
 }
 
-impl<T: JobContextValues> JobRules<T> for DefaultCrawlingRules {
+impl<T: JobContextValues> JobRules<T> for CrawlingRules {
     fn task_filters(&self) -> Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>> {
         let mut filters : Vec<Box<dyn task_filters::TaskFilter<T> + Send + Sync>> = vec![
             Box::new(task_filters::SameDomainTaskFilter::new(self.allow_www)),
@@ -94,14 +95,6 @@ impl<T: JobContextValues> JobRules<T> for DefaultCrawlingRules {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Crawler<R: Resolver=AsyncHyperResolver> {
-    url: Url,
-    settings: config::CrawlerSettings,
-    networking_profile: config::NetworkingProfile,
-    resolver: Option<Arc<R>>
-}
-
 #[derive(Clone)]
 struct HttpClientFactory<R: Resolver> {
     settings: config::CrawlerSettings,
@@ -141,39 +134,43 @@ impl<R: Resolver> HttpClientFactory<R> {
     }
 }
 
-impl<R: Resolver> Crawler<R> {
-    pub fn new(url: Url, settings: config::CrawlerSettings, networking_profile: config::NetworkingProfile) -> Crawler<R> {
+#[derive(Clone, Debug)]
+pub struct Crawler<T: JobContextValues, R: Resolver, RR: JobRules<T>>{
+    settings: config::CrawlerSettings,
+    networking_profile: config::NetworkingProfile<R>,
+    rules: RR,
+    x: PhantomData<T>
+}
+
+impl<T: JobContextValues, R: Resolver, RR: JobRules<T>> Crawler<T, R, RR> {
+    pub fn new(settings: config::CrawlerSettings, networking_profile: config::NetworkingProfile<R>, rules: RR) -> Crawler<T, R, RR> {
         Crawler {
-            url,
             settings,
             networking_profile,
-            resolver: None,
+            rules,
+            x: PhantomData::default(),
         }
     }
 
-    pub fn set_name_resolver(&mut self, r: Arc<R>) {
-        self.resolver = Some(r);
-    }
-
-    pub fn go<T: JobContextValues>(
+    pub fn go(
         &self,
-        rules: Box<dyn JobRules<T> + Send + Sync>,
+        url: Url,
         parse_tx: Sender<ParserTask>,
         sub_tx: Sender<JobUpdate<T>>,
         ctx: StdJobContext<T>
     ) -> Result<PinnedFut>
     {
-        let resolver = if self.resolver.is_none() {
-            Some(Arc::new(R::new_default().context("cannot create default resolver")?))
+        let resolver = if self.networking_profile.resolver.is_none() {
+            Some(Arc::new(Resolver::new_default().context("cannot create default resolver")?))
         } else {
-            self.resolver.clone()
+            self.networking_profile.resolver.clone()
         }.unwrap();
 
-        Ok(TracingTask::new(span!(Level::INFO, url=self.url.as_str()), async move {
+        Ok(TracingTask::new(span!(Level::INFO, url=url.as_str()), async move {
             let mut scheduler = TaskScheduler::new(
-                &self.url,
+                &url,
                 &self.settings,
-                rules.task_filters(),
+                self.rules.task_filters(),
                 ctx.clone(),
                 sub_tx.clone()
             )?;
@@ -192,11 +189,11 @@ impl<R: Resolver> Crawler<R> {
                 )(client_factory.clone());
 
                 let mut processor = TaskProcessor::new(
-                    &self.url,
+                    &url,
                     &self.settings,
-                    rules.status_filters(),
-                    rules.load_filters(),
-                    rules.task_expanders(),
+                    self.rules.status_filters(),
+                    self.rules.load_filters(),
+                    self.rules.task_expanders(),
                     ctx.clone(),
                     scheduler.job_update_tx.clone(),
                     scheduler.tasks_rx.clone(),
@@ -223,25 +220,24 @@ impl<R: Resolver> Crawler<R> {
 }
 
 #[derive(Clone)]
-pub struct MultiCrawler<T: JobContextValues, R: Resolver> {
-    job_rx: Receiver<Job<T>>,
+pub struct MultiCrawler<T: JobContextValues, R: Resolver, RR: JobRules<T>> {
+    job_rx: Receiver<Job<T, RR>>,
     update_tx: Sender<JobUpdate<T>>,
     pp_tx: Sender<ParserTask>,
     concurrency_profile: config::ConcurrencyProfile,
-    networking_profile: config::NetworkingProfile,
-    resolver: Option<Arc<R>>,
+    networking_profile: config::NetworkingProfile<R>,
 }
 
-pub struct Job<T: JobContextValues> {
+pub struct Job<T: JobContextValues, RR: JobRules<T> + Send + Sync> {
     pub ctx: StdJobContext<T>,
     pub url: url::Url,
     pub settings: config::CrawlerSettings,
-    pub rules: Box<dyn JobRules<T> + Send + Sync>,
+    pub rules: RR,
 }
 
-impl<T: JobContextValues, R: Resolver> MultiCrawler<T, R> {
-    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile) -> (MultiCrawler<T, R>, Sender<Job<T>>, Receiver<JobUpdate<T>>) {
-        let (job_tx, job_rx) = bounded_ch::<Job<T>>(concurrency_profile.job_tx_buffer_size());
+impl<T: JobContextValues, R: Resolver, RR: JobRules<T> + Send + Sync + Clone> MultiCrawler<T, R, RR> {
+    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::NetworkingProfile<R>) -> (MultiCrawler<T, R, RR>, Sender<Job<T, RR>>, Receiver<JobUpdate<T>>) {
+        let (job_tx, job_rx) = bounded_ch::<Job<T, RR>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<T>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {
             job_rx,
@@ -249,21 +245,13 @@ impl<T: JobContextValues, R: Resolver> MultiCrawler<T, R> {
             pp_tx,
             concurrency_profile,
             networking_profile,
-            resolver: None,
         }, job_tx, update_rx)
-    }
-
-    pub fn set_name_resolver(&mut self, r: Arc<R>) {
-        self.resolver = Some(r);
     }
 
     async fn process(&self) -> Result<()> {
         while let Ok(job) = self.job_rx.recv().await {
-            let mut crawler = Crawler::new(job.url.clone(), job.settings.clone(), self.networking_profile.clone());
-            if self.resolver.is_some() {
-                crawler.set_name_resolver(self.resolver.clone().unwrap());
-            }
-            let _ = crawler.go(job.rules, self.pp_tx.clone(), self.update_tx.clone(), job.ctx)?.await;
+            let crawler = Crawler::new(job.settings.clone(), self.networking_profile.clone(), job.rules);
+            let _ = crawler.go(job.url.clone(), self.pp_tx.clone(), self.update_tx.clone(), job.ctx)?.await;
         }
         Ok(())
     }

@@ -148,7 +148,7 @@ impl<T: rt::JobContextValues> TaskFilter<T> for HashSetDedupTaskFilter {
             return TaskFilterResult::Skip;
         }
 
-        self.visited.insert(task.link.url.clone().into_string());
+        self.visited.insert(task.link.url.clone().to_string());
         TaskFilterResult::Accept
     }
 }

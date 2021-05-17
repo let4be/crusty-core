@@ -23,7 +23,7 @@ pub trait Resolver: Clone + Send + Sync + 'static {
     fn resolve(&self, host: &str) -> PinnedFut<IntoIter<SocketAddr>>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AsyncHyperResolver {
     resolver: Arc<TokioAsyncResolver>,
 }
