@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 use crate::{
+    types,
     resolver::AsyncHyperResolver,
     resolver::Resolver
 };
@@ -15,6 +16,7 @@ use std::{
 
 use serde::{Deserialize, Serialize, Deserializer, de};
 
+pub type Result<T> = types::Result<T>;
 
 #[derive(Clone, Debug)]
 pub struct CLevel(pub Level);
@@ -146,9 +148,38 @@ pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
     pub resolver: Option<Arc<R>>
 }
 
+impl<R: Resolver> NetworkingProfile<R> {
+    pub fn resolve(self) -> Result<ResolvedNetworkingProfile<R>> {
+        ResolvedNetworkingProfile::new(self)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvedNetworkingProfile<R: Resolver = AsyncHyperResolver> {
+    pub bind_local_ipv4: Option<CIP4Addr>,
+    pub bind_local_ipv6: Option<CIP6Addr>,
+
+    pub resolver: Arc<R>
+}
+
 impl Default for NetworkingProfile {
     fn default() -> Self {
         Self{bind_local_ipv4: None, bind_local_ipv6: None, resolver: None}
+    }
+}
+
+impl<R: Resolver> ResolvedNetworkingProfile<R> {
+    fn new(p: NetworkingProfile<R>) -> Result<Self> {
+        let mut resolver = p.resolver;
+        if resolver.is_none() {
+            resolver = Some(Arc::new(Resolver::new_default().context("cannot create default resolver")?));
+        }
+        let resolver = resolver.unwrap();
+        Ok(Self {
+            bind_local_ipv6: p.bind_local_ipv6,
+            bind_local_ipv4: p.bind_local_ipv4,
+            resolver
+        })
     }
 }
 

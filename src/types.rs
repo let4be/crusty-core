@@ -19,7 +19,7 @@ pub enum Error {
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error("timeout during loading")]
-    Timeout,
+    LoadTimeout,
     #[error("terminated by filter {name:?}")]
     FilterTerm{
         name: String

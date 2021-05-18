@@ -101,14 +101,14 @@ async fn main() -> Result<()> {
     let h_pp = tokio::spawn(pp.go());
 
     let crawler_settings = config::CrawlerSettings::default();
-    let networking_profile = config::NetworkingProfile::default();
+    let networking_profile = config::NetworkingProfile::default().resolve()?;
     let rules = CrawlingRules {
         options: CrawlingRulesOptions{
             page_budget: Some(100),
             ..CrawlingRulesOptions::default()
         },
         ..CrawlingRules::default()}
-        .with_custom_task_expanders(|| vec![Box::new(DataExtractor{})] );
+        .with_task_expanders(|| vec![Box::new(DataExtractor{})] );
 
     let crawler = Crawler::<JobState, TaskState, _, _>::new(crawler_settings, networking_profile, rules);
 
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
     let h_sub = tokio::spawn(process_responses(update_rx));
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    crawler.go(url, tx_pp, update_tx)?.await?;
+    crawler.go(url, tx_pp, update_tx).await?;
 
     let _ = tokio::join!(h_pp, h_sub);
     Ok(())

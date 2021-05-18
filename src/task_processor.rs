@@ -100,7 +100,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector>
                 resp = r;
             },
             _ = timeout => {
-                return Err(Error::Timeout)
+                return Err(Error::LoadTimeout)
             }
         }
 
