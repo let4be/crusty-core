@@ -81,7 +81,7 @@ impl<R: Resolver> Service<Name> for AsyncHyperResolverAdaptor<R> {
     }
 
     fn call(&mut self, name: Name) -> Self::Future {
-        let resolver = self.resolver.clone();
+        let resolver = Arc::clone(&self.resolver);
         Box::pin(async move {
             Ok(resolver.resolve(name.as_str()).await?)
         })

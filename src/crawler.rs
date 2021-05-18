@@ -139,8 +139,8 @@ type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector
 
 impl<R: Resolver> HttpClientFactory<R> {
     fn make(&self) -> (HttpClient<R>, hyper_utils::Stats) {
-        let resolver = AsyncHyperResolverAdaptor::new(self.resolver.clone());
-        let mut http = hyper::client::HttpConnector::new_with_resolver(resolver);
+        let resolver_adaptor = AsyncHyperResolverAdaptor::new(Arc::clone(&self.resolver));
+        let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
         http.set_connect_timeout(self.settings.connect_timeout.clone().map(|v| *v));
 
         if self.addr_ipv4.is_some() ^ self.addr_ipv6.is_some() {
@@ -219,7 +219,6 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver> Crawler<
     {
         TracingTask::new(span!(Level::INFO, url=url.as_str()), async move {
             let ctx = StdJobContext::new(url.clone(), job_state, TaskState::default());
-            let resolver = self.networking_profile.resolver.clone();
 
             let mut scheduler = TaskScheduler::new(
                 &url,
@@ -231,7 +230,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver> Crawler<
 
             let client_factory = HttpClientFactory {
                 settings: self.settings.clone(),
-                resolver: Arc::clone(&resolver),
+                resolver: Arc::clone(&self.networking_profile.resolver),
                 addr_ipv4: self.networking_profile.bind_local_ipv4.clone().map(|v|*v),
                 addr_ipv6: self.networking_profile.bind_local_ipv6.clone().map(|v|*v),
             };

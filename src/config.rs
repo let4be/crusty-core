@@ -134,7 +134,7 @@ impl Default for ConcurrencyProfile {
         let physical_cores = num_cpus::get_physical();
         Self {
             parser_concurrency: physical_cores,
-            domain_concurrency: physical_cores * 50,
+            domain_concurrency: physical_cores * 40,
         }
     }
 }
