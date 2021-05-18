@@ -48,12 +48,12 @@ async fn main() -> anyhow::Result<()> {
 
     let crawler_settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let rules = CrawlingRules {
+    let rules = Box::new(CrawlingRules {
         options: CrawlingRulesOptions::default(),
         ..CrawlingRules::default()}
-        .with_task_expanders(|| vec![Box::new(DataExtractor{})] );
+        .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
 
-    let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, Box::new(rules));
+    let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, rules);
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
     for r in crawler.iter(url, JobState::default(), tx_pp) {
