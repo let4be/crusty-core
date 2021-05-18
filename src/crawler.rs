@@ -16,7 +16,6 @@ use crate::{
 use std::{
     sync::{Arc},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    marker::PhantomData
 };
 
 use futures::{future};
@@ -167,8 +166,6 @@ pub struct Crawler<JobState: JobStateValues, TaskState: TaskStateValues, R: Reso
     settings: config::CrawlerSettings,
     networking_profile: config::ResolvedNetworkingProfile<R>,
     rules: Arc<BoxedJobRules<JobState, TaskState>>,
-    _js: PhantomData<JobState>,
-    _ts: PhantomData<TaskState>
 }
 
 pub struct CrawlerIter<JobState: JobStateValues, TaskState: TaskStateValues>{
@@ -190,8 +187,6 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues, R: Resolver> Crawler<
             settings,
             networking_profile,
             rules: Arc::new(rules),
-            _js: PhantomData::default(),
-            _ts: PhantomData::default(),
         }
     }
 
