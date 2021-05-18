@@ -16,7 +16,7 @@ right now API is in active development, once it's a bit settled down I will rele
 for now simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = {git = "https://github.com/let4be/crusty-core", branch = "main"}
+crusty-core = {git = "https://github.com/let4be/crusty-core"}
 ```
 
 ### Example - crawl single website, collect information about `TITLE` tags 
