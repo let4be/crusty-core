@@ -67,10 +67,10 @@ async fn main() -> anyhow::Result<()> {
         ..CrawlingRules::default()}
         .with_task_expanders(|| vec![Box::new(DataExtractor{})] );
 
-    let crawler = Crawler::<JobState, TaskState, _, _>::new(crawler_settings, networking_profile, rules);
+    let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, Box::new(rules));
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    for r in crawler.iter(url, tx_pp) {
+    for r in crawler.iter(url, JobState::default(), tx_pp) {
         println!("- {}, task context: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
             println!("final context: {:?}", r.context.job_state.lock().unwrap());

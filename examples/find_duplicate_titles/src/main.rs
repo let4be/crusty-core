@@ -110,14 +110,14 @@ async fn main() -> Result<()> {
         ..CrawlingRules::default()}
         .with_task_expanders(|| vec![Box::new(DataExtractor{})] );
 
-    let crawler = Crawler::<JobState, TaskState, _, _>::new(crawler_settings, networking_profile, rules);
+    let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, Box::new(rules));
 
     let (update_tx, update_rx) = types::async_channel::unbounded();
 
     let h_sub = tokio::spawn(process_responses(update_rx));
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    crawler.go(url, tx_pp, update_tx).await?;
+    crawler.go(url, JobState::default(), tx_pp, update_tx).await?;
 
     let _ = tokio::join!(h_pp, h_sub);
     Ok(())
