@@ -1,5 +1,11 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
+use crate::{
+    task_filters,
+    status_filters,
+    load_filters,
+    expanders
+};
 
 use std::{
     sync::{Arc, Mutex},
@@ -13,6 +19,20 @@ use thiserror::{self, Error};
 use futures::Future;
 pub use select;
 pub use async_channel;
+
+pub type TaskFilters<JobState, TaskState> = Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>;
+pub type StatusFilters<JobState, TaskState> = Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>;
+pub type LoadFilters<JobState, TaskState> = Vec<Box<dyn load_filters::LoadFilter<JobState, TaskState> + Send + Sync>>;
+pub type TaskExpanders<JobState, TaskState> = Vec<Box<dyn expanders::TaskExpander<JobState, TaskState> + Send + Sync>>;
+
+pub trait JobRules<JobState: JobStateValues, TaskState: TaskStateValues>: Send + Sync + 'static {
+    fn task_filters(&self) -> TaskFilters<JobState, TaskState>;
+    fn status_filters(&self) -> StatusFilters<JobState, TaskState>;
+    fn load_filters(&self) -> LoadFilters<JobState, TaskState>;
+    fn task_expanders(&self) -> TaskExpanders<JobState, TaskState>;
+}
+
+pub type BoxedJobRules<JobState, TaskState> = Box<dyn JobRules<JobState, TaskState>>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -184,7 +204,7 @@ pub struct ParserResponse {
     pub work_time: Duration
 }
 
-pub trait JobStateValues: Send + Sync + Clone + Default + 'static {
+pub trait JobStateValues: Send + Sync + Clone + 'static {
     fn finalize(&mut self){}
 }
 

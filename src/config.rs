@@ -14,7 +14,7 @@ use std::{
     sync::Arc
 };
 
-use serde::{Deserialize, Serialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, de};
 
 pub type Result<T> = types::Result<T>;
 
@@ -123,7 +123,7 @@ impl<'de> Deserialize<'de> for CDuration {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ConcurrencyProfile {
     pub parser_concurrency: usize,
     pub domain_concurrency: usize,
@@ -134,7 +134,7 @@ impl Default for ConcurrencyProfile {
         let physical_cores = num_cpus::get_physical();
         Self {
             parser_concurrency: physical_cores,
-            domain_concurrency: physical_cores * 30,
+            domain_concurrency: physical_cores * 50,
         }
     }
 }
@@ -145,6 +145,7 @@ pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
     pub bind_local_ipv6: Option<CIP6Addr>,
 
     #[serde(skip)]
+    #[serde(default = "Option::default")]
     pub resolver: Option<Arc<R>>
 }
 

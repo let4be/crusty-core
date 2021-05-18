@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::{types::*, config, task_filters, task_filters::TaskFilterResult, JobRules, TaskFilters};
+use crate::{types::*, config, task_filters, task_filters::TaskFilterResult};
 
 use std::sync::{Arc};
 
@@ -23,9 +23,9 @@ pub(crate) struct TaskScheduler<JobState: JobStateValues, TaskState: TaskStateVa
 }
 
 impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobState, TaskState> {
-    pub(crate) fn new<R: JobRules<JobState, TaskState>>(
+    pub(crate) fn new(
         url: &Url,
-        rules: Arc<R>,
+        rules: Arc<BoxedJobRules<JobState, TaskState>>,
         settings: &config::CrawlerSettings,
         job_context: StdJobContext<JobState, TaskState>,
         update_tx: Sender<JobUpdate<JobState, TaskState>>
