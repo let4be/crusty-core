@@ -143,14 +143,11 @@ impl<R: Resolver> HttpClientFactory<R> {
         let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
         http.set_connect_timeout(self.settings.connect_timeout.clone().map(|v| *v));
 
-        if self.addr_ipv4.is_some() ^ self.addr_ipv6.is_some() {
-            if self.addr_ipv4.is_some() {
-                http.set_local_address(Some(IpAddr::V4(self.addr_ipv4.unwrap())));
-            } else if self.addr_ipv6.is_some() {
-                http.set_local_address(Some(IpAddr::V6(self.addr_ipv6.unwrap())));
-            }
-        } else if self.addr_ipv4.is_some() && self.addr_ipv6.is_some() {
-            http.set_local_addresses(self.addr_ipv4.unwrap(), self.addr_ipv6.unwrap());
+        match (self.addr_ipv4, self.addr_ipv6) {
+            (Some(ipv4), Some(ipv6)) => http.set_local_addresses(ipv4, ipv6),
+            (Some(ipv4), None) => http.set_local_address(Some(IpAddr::V4(ipv4))),
+            (None, Some(ipv6)) => http.set_local_address(Some(IpAddr::V6(ipv6))),
+            (None, None) => {}
         }
 
         http.set_recv_buffer_size(self.settings.socket_read_buffer_size.clone().map(|v|*v));
