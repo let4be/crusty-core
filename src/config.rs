@@ -140,9 +140,29 @@ impl Default for ConcurrencyProfile {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
+pub struct NetworkingProfileValues {
+    pub connect_timeout: Option<CDuration>,
+    pub socket_read_buffer_size: Option<CBytes>,
+    pub socket_write_buffer_size: Option<CBytes>,
     pub bind_local_ipv4: Option<CIP4Addr>,
     pub bind_local_ipv6: Option<CIP6Addr>,
+}
+
+impl Default for NetworkingProfileValues {
+    fn default() -> Self {
+        Self{
+            connect_timeout: Some(CDuration::from_secs(5)),
+            socket_write_buffer_size: Some(CBytes(32 * 1024)),
+            socket_read_buffer_size: Some(CBytes(32 * 1024)),
+            bind_local_ipv4: None,
+            bind_local_ipv6: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
+    pub values: NetworkingProfileValues,
 
     #[serde(skip)]
     #[serde(default = "Option::default")]
@@ -155,18 +175,20 @@ impl<R: Resolver> NetworkingProfile<R> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ResolvedNetworkingProfile<R: Resolver = AsyncHyperResolver> {
-    pub bind_local_ipv4: Option<CIP4Addr>,
-    pub bind_local_ipv6: Option<CIP6Addr>,
-
-    pub resolver: Arc<R>
-}
-
 impl Default for NetworkingProfile {
     fn default() -> Self {
-        Self{bind_local_ipv4: None, bind_local_ipv6: None, resolver: None}
+        Self{
+            values: NetworkingProfileValues::default(),
+            resolver: None
+        }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvedNetworkingProfile<R: Resolver = AsyncHyperResolver> {
+    pub values: NetworkingProfileValues,
+
+    pub resolver: Arc<R>
 }
 
 impl<R: Resolver> ResolvedNetworkingProfile<R> {
@@ -177,8 +199,7 @@ impl<R: Resolver> ResolvedNetworkingProfile<R> {
         }
         let resolver = resolver.unwrap();
         Ok(Self {
-            bind_local_ipv6: p.bind_local_ipv6,
-            bind_local_ipv4: p.bind_local_ipv4,
+            values: p.values,
             resolver
         })
     }
@@ -201,14 +222,11 @@ impl ConcurrencyProfile {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct CrawlerSettings {
-    pub concurrency: usize,
     pub internal_read_buffer_size: CBytes,
-    pub socket_read_buffer_size: Option<CBytes>,
-    pub socket_write_buffer_size: Option<CBytes>,
+    pub concurrency: usize,
     pub max_response_size: CBytes,
     pub max_redirect: usize,
     pub delay: CDuration,
-    pub connect_timeout: Option<CDuration>,
     pub load_timeout: CDuration,
     pub job_soft_timeout: CDuration,
     pub job_hard_timeout: CDuration,
@@ -219,15 +237,12 @@ impl fmt::Display for CrawlerSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "concurrency: {}, delay: {:?}, job hard timeout: {:?}, job soft timeout: {:?}, connect timeout: {:?}, irbs: {:?}, socker rbs: {:?}, socket wbs: {:?}, load timeout: {:?}, max_response_size: {:?}, max_redirect: {:?}, custom headers: {:?}",
+            "concurrency: {}, delay: {:?}, job hard timeout: {:?}, job soft timeout: {:?}, irbs: {:?}, load timeout: {:?}, max_response_size: {:?}, max_redirect: {:?}, custom headers: {:?}",
             self.concurrency,
             self.delay,
             self.job_hard_timeout,
             self.job_soft_timeout,
-            self.connect_timeout,
             self.internal_read_buffer_size,
-            self.socket_read_buffer_size,
-            self.socket_write_buffer_size,
             self.load_timeout,
             self.max_response_size,
             self.max_redirect,
@@ -240,14 +255,11 @@ impl Default for CrawlerSettings {
     fn default() -> Self {
         Self {
             concurrency: 2,
+            internal_read_buffer_size: CBytes(32 * 1024),
             delay: CDuration::from_secs(1),
             job_hard_timeout: CDuration::from_secs(60),
             job_soft_timeout: CDuration::from_secs(30),
             load_timeout: CDuration::from_secs(10),
-            connect_timeout: Some(CDuration::from_secs(5)),
-            internal_read_buffer_size: CBytes(32 * 1024),
-            socket_write_buffer_size: Some(CBytes(32 * 1024)),
-            socket_read_buffer_size: Some(CBytes(32 * 1024)),
             custom_headers: [
                 (
                     http::header::USER_AGENT.to_string(),

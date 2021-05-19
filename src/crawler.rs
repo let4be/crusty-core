@@ -15,7 +15,7 @@ use crate::{
 
 use std::{
     sync::{Arc},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr},
 };
 
 use futures::{future};
@@ -127,10 +127,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 
 #[derive(Clone)]
 struct HttpClientFactory<R: Resolver> {
-    settings: config::CrawlerSettings,
-    addr_ipv4: Option<Ipv4Addr>,
-    addr_ipv6: Option<Ipv6Addr>,
-    resolver: Arc<R>,
+    networking_profile: config::ResolvedNetworkingProfile<R>,
 }
 
 type HttpClient<R> = hyper::Client<HttpConnector<R>>;
@@ -138,19 +135,21 @@ type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector
 
 impl<R: Resolver> HttpClientFactory<R> {
     fn make(&self) -> (HttpClient<R>, hyper_utils::Stats) {
-        let resolver_adaptor = AsyncHyperResolverAdaptor::new(Arc::clone(&self.resolver));
-        let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
-        http.set_connect_timeout(self.settings.connect_timeout.clone().map(|v| *v));
+        let v = self.networking_profile.values.clone();
 
-        match (self.addr_ipv4, self.addr_ipv6) {
+        let resolver_adaptor = AsyncHyperResolverAdaptor::new(Arc::clone(&self.networking_profile.resolver));
+        let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
+        http.set_connect_timeout(v.connect_timeout.clone().map(|v| *v));
+
+        match (v.bind_local_ipv4.map(|v|*v), v.bind_local_ipv6.map(|v|*v)) {
             (Some(ipv4), Some(ipv6)) => http.set_local_addresses(ipv4, ipv6),
             (Some(ipv4), None) => http.set_local_address(Some(IpAddr::V4(ipv4))),
             (None, Some(ipv6)) => http.set_local_address(Some(IpAddr::V6(ipv6))),
             (None, None) => {}
         }
 
-        http.set_recv_buffer_size(self.settings.socket_read_buffer_size.clone().map(|v|*v));
-        http.set_send_buffer_size(self.settings.socket_write_buffer_size.clone().map(|v|*v));
+        http.set_recv_buffer_size(v.socket_read_buffer_size.clone().map(|v|*v));
+        http.set_send_buffer_size(v.socket_write_buffer_size.clone().map(|v|*v));
         http.enforce_http(false);
         let http_counting = hyper_utils::CountingConnector::new(http);
         let stats = http_counting.stats.clone();
@@ -221,10 +220,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> Crawler<JS, TS, R> {
             )?;
 
             let client_factory = HttpClientFactory {
-                settings: self.settings.clone(),
-                resolver: Arc::clone(&self.networking_profile.resolver),
-                addr_ipv4: self.networking_profile.bind_local_ipv4.clone().map(|v|*v),
-                addr_ipv6: self.networking_profile.bind_local_ipv6.clone().map(|v|*v),
+                networking_profile: self.networking_profile.clone(),
             };
 
             let mut processor_handles = vec![];
