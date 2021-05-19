@@ -88,49 +88,22 @@ pub struct Status {
     pub links: Vec<Link>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StatusMetrics {
     pub wait_time: Duration,
     pub status_time: Duration,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LoadMetrics {
     pub load_time: Duration,
     pub read_size: usize,
     pub write_size: usize,
 }
 
-impl Default for StatusMetrics {
-    fn default() -> Self {
-        Self {
-            wait_time: Duration::from_secs(0),
-            status_time: Duration::from_secs(0),
-        }
-    }
-}
-
-impl Default for LoadMetrics {
-    fn default() -> Self {
-        Self {
-            load_time: Duration::from_secs(0),
-            read_size: 0,
-            write_size: 0,
-        }
-    }
-}
-
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct FollowMetrics {
     pub parse_time: Duration,
-}
-
-impl Default for FollowMetrics {
-    fn default() -> Self {
-        Self {
-            parse_time: Duration::from_secs(0),
-        }
-    }
 }
 
 pub enum FollowResult {

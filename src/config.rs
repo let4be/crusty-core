@@ -157,7 +157,7 @@ impl Default for NetworkingProfileValues {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
     pub values: NetworkingProfileValues,
 
@@ -169,15 +169,6 @@ pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
 impl<R: Resolver> NetworkingProfile<R> {
     pub fn resolve(self) -> Result<ResolvedNetworkingProfile<R>> {
         ResolvedNetworkingProfile::new(self)
-    }
-}
-
-impl Default for NetworkingProfile {
-    fn default() -> Self {
-        Self{
-            values: NetworkingProfileValues::default(),
-            resolver: None
-        }
     }
 }
 
