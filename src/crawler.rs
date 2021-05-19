@@ -160,7 +160,6 @@ impl<R: Resolver> HttpClientFactory<R> {
     }
 }
 
-#[derive(Clone)]
 pub struct Crawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver>{
     settings: config::CrawlerSettings,
     networking_profile: config::ResolvedNetworkingProfile<R>,
