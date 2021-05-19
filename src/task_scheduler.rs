@@ -140,7 +140,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             while self.pages_pending > 0 {
                 tokio::select! {
                     res = self.job_update_rx.recv() => {
-                        self.process_task_response(res.unwrap(), false).await;
+                        self.process_task_response(res.unwrap(), is_soft_timeout).await;
                     }
 
                     _ = &mut timeout => {
