@@ -149,7 +149,6 @@ pub enum JobStatus {
 pub struct Task {
     pub queued_at: Instant,
     pub link: Link,
-    pub parent_link: Option<Link>,
     pub level: usize,
 }
 
@@ -273,7 +272,6 @@ impl Task {
         Ok(Task {
             queued_at: Instant::now(),
             link,
-            parent_link: None::<Link>,
             level: 0,
         })
     }
@@ -287,7 +285,6 @@ impl Task {
         Ok(Task {
             queued_at: Instant::now(),
             link,
-            parent_link: Some(parent.link.clone()),
             level: parent.level + 1,
         })
     }

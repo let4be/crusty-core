@@ -148,7 +148,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Has
             return TaskFilterResult::Skip;
         }
 
-        self.visited.insert(task.link.url.clone().to_string());
+        self.visited.insert(task.link.url.to_string());
         TaskFilterResult::Accept
     }
 }
