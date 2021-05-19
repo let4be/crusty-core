@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     expanders::TaskExpander,
     types::{
-        JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
+        Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
         select::predicate::Name, select::document::Document,
         async_channel::unbounded,
         async_channel::Receiver
@@ -104,24 +104,25 @@ async fn main() -> Result<()> {
     let (pp, tx_pp) = ParserProcessor::new( concurrency_profile, 1024 * 1024 * 32);
     let h_pp = tokio::spawn(pp.go());
 
-    let crawler_settings = config::CrawlerSettings::default();
+    let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let rules = CrawlingRules {
+    let rules = Box::new(CrawlingRules {
         options: CrawlingRulesOptions{
             page_budget: Some(100),
             ..CrawlingRulesOptions::default()
         },
         ..CrawlingRules::default()}
-        .with_task_expanders(|| vec![Box::new(DataExtractor{})] );
+        .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
 
-    let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, Box::new(rules));
+    let crawler = Crawler::new(networking_profile);
 
     let (update_tx, update_rx) = unbounded();
 
     let h_sub = tokio::spawn(process_responses(update_rx));
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    crawler.go(url, JobState::default(), tx_pp, update_tx).await?;
+    let job = Job{url, settings, rules, job_state: JobState::default()};
+    crawler.go(job,tx_pp, update_tx).await?;
 
     let _ = h_pp.await?;
     let _ = h_sub.await?;

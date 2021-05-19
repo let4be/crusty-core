@@ -74,16 +74,17 @@ impl<R: Resolver> AsyncHyperResolverAdaptor<R> {
 impl<R: Resolver> Service<Name> for AsyncHyperResolverAdaptor<R> {
     type Response = std::vec::IntoIter<SocketAddr>;
     type Error = io::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = PinnedFut<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, name: Name) -> Self::Future {
         let resolver = Arc::clone(&self.resolver);
         Box::pin(async move {
-            Ok(resolver.resolve(name.as_str()).await?)
+            resolver.resolve(name.as_str()).await
         })
     }
 }

@@ -1,11 +1,10 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::{types::*, config, task_filters, task_filters::TaskFilterResult};
+use crate::{types::*, task_filters, task_filters::TaskFilterResult};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
+    job: ResolvedJob<JS, TS>,
     task_filters: TaskFilters<JS, TS>,
-    settings: config::CrawlerSettings,
-    job_ctx: JobContext<JS, TS>,
 
     root_task: Task,
     task_seq_num: usize,
@@ -20,21 +19,17 @@ pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
 
 impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     pub(crate) fn new(
-        url: &Url,
-        rules: Arc<BoxedJobRules<JS, TS>>,
-        settings: &config::CrawlerSettings,
-        job_context: JobContext<JS, TS>,
+        job: ResolvedJob<JS, TS>,
         update_tx: Sender<JobUpdate<JS, TS>>
     ) -> Result<TaskScheduler<JS, TS>> {
-        let root_task = Task::new_root(&url)?;
+        let root_task = Task::new_root(&job.url)?;
 
         let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
         let (tasks_tx, tasks_rx) = unbounded_ch::<Task>();
 
         Ok(TaskScheduler {
-            settings: settings.clone(),
-            task_filters: rules.task_filters(),
-            job_ctx: job_context,
+            task_filters: job.rules.task_filters(),
+            job,
 
             root_task,
             task_seq_num: 0,
@@ -62,7 +57,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
         for filter in &mut self.task_filters {
-            match filter.accept(&mut self.job_ctx, self.task_seq_num, task) {
+            match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
                 task_filters::TaskFilterResult::Accept => continue,
                 task_filters::TaskFilterResult::Skip => {
                     if task.is_root() {
@@ -93,7 +88,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 
         if !ignore_links {
             if let JobStatus::Processing(Ok(ref r)) = task_response.status {
-                let max_redirect = self.settings.max_redirect;
+                let max_redirect = self.job.settings.max_redirect;
 
                 let tasks :Vec<Task> = r.collect_links()
                     .filter_map(|link| {
@@ -129,8 +124,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     pub(crate) fn go(&mut self) -> PinnedTask<JobUpdate<JS, TS>> {
         TracingTask::new(span!(Level::INFO), async move {
             trace!(
-                soft_timeout_ms = self.settings.job_soft_timeout.as_millis() as u32,
-                hard_timeout_ms = self.settings.job_hard_timeout.as_millis() as u32,
+                soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32,
+                hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32,
                 "Starting..."
             );
 
@@ -141,7 +136,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 
             let mut is_soft_timeout = false;
             let mut is_hard_timeout = false;
-            let mut timeout = self.job_ctx.timeout_remaining(*self.settings.job_soft_timeout);
+            let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_soft_timeout);
 
             while self.pages_pending > 0 {
                 tokio::select! {
@@ -155,7 +150,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                             break
                         }
                         is_soft_timeout = true;
-                        timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
+                        timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
                     }
                 }
             }
@@ -168,7 +163,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             } else {
                 None
             };
-            let ctx = self.job_ctx.clone();
+            let ctx = self.job.ctx.clone();
             {
                 let mut job_state = ctx.job_state.lock().unwrap();
                 job_state.finalize();

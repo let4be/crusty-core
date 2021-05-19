@@ -52,7 +52,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for C
             }
         }
 
-        return StatusFilterAction::Term;
+        StatusFilterAction::Term
     }
 }
 
@@ -112,7 +112,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for R
         }
 
         ctx.push_links(vec![link.unwrap()]);
-        return StatusFilterAction::Skip;
+        StatusFilterAction::Skip
     }
 }
 

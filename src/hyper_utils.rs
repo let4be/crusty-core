@@ -25,6 +25,7 @@ pub struct Stats {
 }
 
 impl Stats {
+    #[allow(clippy::mutex_atomic)]
     pub fn new() -> Self {
         Self {
             read: Arc::new(Mutex::new(0)),
@@ -86,7 +87,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for CountingStream<T> {
                 s.stats.inc_write(n);
                 Poll::Ready(Ok(n))
             },
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -112,7 +113,7 @@ impl<T: AsyncWrite + AsyncRead + Unpin> AsyncRead for CountingStream<T> {
                 s.stats.inc_read(buf.filled().len() - len_before);
                 Poll::Ready(Ok(()))
             },
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
     }

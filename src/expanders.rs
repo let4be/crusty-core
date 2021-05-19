@@ -12,6 +12,7 @@ pub trait TaskExpander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     );
 }
 
+#[derive(Default)]
 pub struct FollowLinks {}
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for FollowLinks {
@@ -43,6 +44,7 @@ impl FollowLinks {
     }
 }
 
+#[derive(Default)]
 pub struct LoadImages {}
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for LoadImages {

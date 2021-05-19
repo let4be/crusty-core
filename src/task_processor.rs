@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::{types::*, config, status_filters, load_filters, hyper_utils};
+use crate::{types::*, status_filters, load_filters, hyper_utils};
 
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
@@ -12,12 +12,10 @@ impl<T: hyper::client::connect::Connect + Clone + Send + Sync + 'static> LikeHtt
 pub(crate) type ClientFactory<C> = Box<dyn Fn() -> (hyper::Client<C>, hyper_utils::Stats) + Send + Sync + 'static>;
 
 pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> {
-    url: Url,
+    job: ResolvedJob<JS, TS>,
     status_filters: StatusFilters<JS, TS>,
     load_filters: LoadFilters<JS, TS>,
     task_expanders: Arc<TaskExpanders<JS, TS>>,
-    settings: config::CrawlerSettings,
-    job_ctx: JobContext<JS, TS>,
 
     tx: Sender<JobUpdate<JS, TS>>,
     tasks_rx: Receiver<Task>,
@@ -28,22 +26,17 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: Like
 impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcessor<JS, TS, C>
 {
     pub(crate) fn new(
-        url: &Url,
-        rules: Arc<BoxedJobRules<JS, TS>>,
-        settings: &config::CrawlerSettings,
-        job_context: JobContext<JS, TS>,
+        job: ResolvedJob<JS, TS>,
         tx: Sender<JobUpdate<JS, TS>>,
         tasks_rx: Receiver<Task>,
         parse_tx: Sender<ParserTask>,
         client_factory: ClientFactory<C>,
     ) -> TaskProcessor<JS, TS, C> {
         TaskProcessor {
-            url: url.clone(),
-            status_filters: rules.status_filters(),
-            load_filters: rules.load_filters(),
-            task_expanders: Arc::new(rules.task_expanders()),
-            settings: settings.clone(),
-            job_ctx: job_context,
+            status_filters: job.rules.status_filters(),
+            load_filters: job.rules.load_filters(),
+            task_expanders: Arc::new(job.rules.task_expanders()),
+            job,
             tx,
             tasks_rx,
             parse_tx,
@@ -52,13 +45,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     }
 
     async fn read(&self, body: &mut hyper::Response<hyper::Body>) -> Result<BytesMut> {
-        let mut bytes = BytesMut::with_capacity(*self.settings.internal_read_buffer_size);
+        let mut bytes = BytesMut::with_capacity(*self.job.settings.internal_read_buffer_size);
 
         while let Some(buf) = body.data().await {
             let buf = buf.context("")?;
             if buf.has_remaining() {
-                if bytes.len() + buf.len() > *self.settings.max_response_size as usize {
-                    return Err(anyhow!("max response size reached: {}", *self.settings.max_response_size).into());
+                if bytes.len() + buf.len() > *self.job.settings.max_response_size as usize {
+                    return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size).into());
                 }
                 bytes.put(buf);
             }
@@ -82,11 +75,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         let mut req = hyper::Request::builder();
         req = req.uri(uri).method(hyper::Method::GET);
 
-        for (n, v) in &self.settings.custom_headers {
+        for (n, v) in &self.job.settings.custom_headers {
             req = req.header(n, v[0].clone());
         }
 
-        let timeout = time::sleep(*self.settings.load_timeout);
+        let timeout = time::sleep(*self.job.settings.load_timeout);
 
         let resp;
         tokio::select! {
@@ -112,7 +105,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
         let mut term_by = None;
         for filter in self.status_filters.iter() {
-            let r = filter.accept(&mut self.job_ctx, &task, &status);
+            let r = filter.accept(&mut self.job.ctx, &task, &status);
             match r {
                 status_filters::StatusFilterAction::Term => {
                     term_by = Some(filter.name());
@@ -126,7 +119,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             return Err(Error::FilterTerm {name: term_by.unwrap().into()})
         }
 
-        status.links = self.job_ctx.consume_links();
+        status.links = self.job.ctx.consume_links();
         Ok((status, resp))
     }
 
@@ -164,7 +157,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
         let mut term_by = None;
         for filter in self.load_filters.iter() {
-            let r = filter.accept(&self.job_ctx, &task, &status);
+            let r = filter.accept(&self.job.ctx, &task, &status);
             match r {
                 load_filters::LoadFilterAction::Term => {
                     term_by = Some(filter.name());
@@ -180,7 +173,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
         let load_data = LoadData{
             load_metrics,
-            links: self.job_ctx.consume_links()
+            links: self.job.ctx.consume_links()
         };
         Ok((load_data, reader))
     }
@@ -196,7 +189,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         let payload = {
             let task = Arc::clone(&task);
             let task_expanders = Arc::clone(&self.task_expanders);
-            let mut job_ctx = self.job_ctx.clone();
+            let mut job_ctx = self.job.ctx.clone();
 
             move || -> Result<FollowData> {
                 let t = Instant::now();
@@ -264,7 +257,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     }
 
     pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
-        TracingTask::new(span!(Level::INFO, n=n, url=self.url.as_str()), async move {
+        TracingTask::new(span!(Level::INFO, n=n, url=self.job.url.as_str()), async move {
             let (client, mut stats) = (self.client_factory)();
 
             while let Ok(task) = self.tasks_rx.recv().await {
@@ -272,14 +265,14 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
                     break
                 }
 
-                let timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
+                let timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
 
                 stats.reset();
 
                 let t = Arc::new(task);
                 tokio::select! {
                     status = self.process_task(Arc::clone(&t), &client, &stats) => {
-                        let ctx = self.job_ctx.clone();
+                        let ctx = self.job.ctx.clone();
 
                         let _ = self.tx.send(JobUpdate {
                             task: Arc::clone(&t),
@@ -290,10 +283,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
                     _ = timeout => break
                 }
 
-                if self.settings.delay.as_millis() > 0 {
-                    let timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
+                if self.job.settings.delay.as_millis() > 0 {
+                    let timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
                     tokio::select! {
-                        _ = time::sleep(*self.settings.delay) => {}
+                        _ = time::sleep(*self.job.settings.delay) => {}
                         _ = timeout => break
                     }
                 }

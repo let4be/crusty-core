@@ -145,8 +145,8 @@ impl<R: Resolver> HttpClientFactory<R> {
             (None, None) => {}
         }
 
-        http.set_recv_buffer_size(v.socket_read_buffer_size.clone().map(|v|*v));
-        http.set_send_buffer_size(v.socket_write_buffer_size.clone().map(|v|*v));
+        http.set_recv_buffer_size(v.socket_read_buffer_size.map(|v|*v));
+        http.set_send_buffer_size(v.socket_write_buffer_size.map(|v|*v));
         http.enforce_http(false);
         let http_counting = hyper_utils::CountingConnector::new(http);
         let stats = http_counting.stats.clone();
@@ -157,10 +157,8 @@ impl<R: Resolver> HttpClientFactory<R> {
     }
 }
 
-pub struct Crawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver>{
-    settings: config::CrawlerSettings,
+pub struct Crawler<R: Resolver>{
     networking_profile: config::ResolvedNetworkingProfile<R>,
-    rules: Arc<BoxedJobRules<JS, TS>>,
 }
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues>{
@@ -176,42 +174,36 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
     }
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> Crawler<JS, TS, R> {
-    pub fn new(settings: config::CrawlerSettings, networking_profile: config::ResolvedNetworkingProfile<R>, rules: BoxedJobRules<JS, TS>) -> Crawler<JS, TS, R> {
+impl<R: Resolver> Crawler<R> {
+    pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>) -> Crawler<R> {
         Crawler {
-            settings,
             networking_profile,
-            rules: Arc::new(rules),
         }
     }
 
-    pub fn iter(self, url: Url, job_state: JS, parse_tx: Sender<ParserTask>) -> CrawlerIter<JS, TS> {
+    pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>, parse_tx: Sender<ParserTask>) -> CrawlerIter<JS, TS> {
         let (tx, rx) = async_channel::unbounded();
 
         let h = tokio::spawn(async move {
-            self.go(url, job_state, parse_tx,tx).await?;
+            self.go(job, parse_tx,tx).await?;
             Ok::<_, Error>(())
         });
 
         CrawlerIter{rx, _h: h}
     }
 
-    pub fn go(
+    pub fn go<JS: JobStateValues, TS: TaskStateValues>(
         &self,
-        url: Url,
-        job_state: JS,
+        job: Job<JS, TS>,
         parse_tx: Sender<ParserTask>,
         update_tx: Sender<JobUpdate<JS, TS>>,
     ) -> PinnedTask
     {
-        TracingTask::new(span!(Level::INFO, url=url.as_str()), async move {
-            let ctx = JobContext::new(url.clone(), job_state, TS::default());
+        TracingTask::new(span!(Level::INFO, url=job.url.as_str()), async move {
+            let job = ResolvedJob::from(job);
 
             let mut scheduler = TaskScheduler::new(
-                &url,
-                Arc::clone(&self.rules),
-                &self.settings,
-                ctx.clone(),
+                job.clone(),
                 update_tx.clone()
             )?;
 
@@ -220,20 +212,14 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> Crawler<JS, TS, R> {
             };
 
             let mut processor_handles = vec![];
-            for i in 0..self.settings.concurrency {
-                let client_factory = (move |cf: HttpClientFactory<R>|
-                    Box::new(move || cf.make())
-                )(client_factory.clone());
-
+            for i in 0..job.settings.concurrency {
+                let cf = client_factory.clone();
                 let mut processor = TaskProcessor::new(
-                    &url,
-                    Arc::clone(&self.rules),
-                    &self.settings,
-                    ctx.clone(),
+                    job.clone(),
                     scheduler.job_update_tx.clone(),
                     scheduler.tasks_rx.clone(),
                     parse_tx.clone(),
-                    client_factory
+                    Box::new(move || cf.make())
                 );
 
                 processor_handles.push(tokio::spawn(async move {
@@ -265,17 +251,10 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
     networking_profile: config::ResolvedNetworkingProfile<R>,
 }
 
-pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
-    pub url: url::Url,
-    pub settings: config::CrawlerSettings,
-    pub rules: Box<dyn JobRules<JS, TS>>,
-    pub job_state: JS
-}
-
+pub type MultiCrawlerTuple<JS, TS, R> = (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, R> {
-    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>)
-        -> (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>) {
 
+    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>) -> MultiCrawlerTuple<JS, TS, R> {
         let (job_tx, job_rx) = bounded_ch::<Job<JS, TS>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {
@@ -289,8 +268,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
 
     async fn process(&self) -> Result<()> {
         while let Ok(job) = self.job_rx.recv().await {
-            let crawler = Crawler::new(job.settings.clone(), self.networking_profile.clone(), job.rules);
-            let _ = crawler.go(job.url.clone(), job.job_state, self.pp_tx.clone(), self.update_tx.clone()).await;
+            let crawler = Crawler::new( self.networking_profile.clone());
+            let _ = crawler.go(job, self.pp_tx.clone(), self.update_tx.clone()).await;
         }
         Ok(())
     }

@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     expanders::TaskExpander,
     types::{
-        JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus,
+        Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus,
         select::predicate::Name, select::document::Document
     },
     config,
@@ -46,17 +46,18 @@ async fn main() -> anyhow::Result<()> {
     let (pp, tx_pp) = ParserProcessor::new( concurrency_profile, 1024 * 1024 * 32);
     let h_pp = tokio::spawn(pp.go());
 
-    let crawler_settings = config::CrawlerSettings::default();
+    let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let rules = Box::new(CrawlingRules {
         options: CrawlingRulesOptions::default(),
         ..CrawlingRules::default()}
         .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
 
-    let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, rules);
+    let crawler = Crawler::new(networking_profile);
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    for r in crawler.iter(url, JobState::default(), tx_pp) {
+    let job = Job{url, settings, rules, job_state: JobState::default()};
+    for r in crawler.iter(job, tx_pp) {
         println!("- {}, task context: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
             println!("final context: {:?}", r.context.job_state.lock().unwrap());

@@ -6,7 +6,8 @@ use crate::{
     task_filters,
     status_filters,
     load_filters,
-    expanders
+    expanders,
+    config
 };
 
 use humansize::{file_size_opts, FileSize};
@@ -16,6 +17,32 @@ pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::TaskFilter<JS, TS> + Se
 pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::StatusFilter<JS, TS> + Send + Sync>>;
 pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::LoadFilter<JS, TS> + Send + Sync>>;
 pub type TaskExpanders<JS, TS> = Vec<Box<dyn expanders::TaskExpander<JS, TS> + Send + Sync>>;
+
+pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
+    pub url: url::Url,
+    pub settings: config::CrawlerSettings,
+    pub rules: Box<dyn JobRules<JS, TS>>,
+    pub job_state: JS
+}
+
+#[derive(Clone)]
+pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
+    pub url: url::Url,
+    pub settings: config::CrawlerSettings,
+    pub rules: Arc<Box<dyn JobRules<JS, TS>>>,
+    pub ctx: JobContext<JS, TS>
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
+    fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
+        ResolvedJob {
+            url: job.url.clone(),
+            settings: job.settings,
+            rules: Arc::new(job.rules),
+            ctx: JobContext::new(job.url, job.job_state, TS::default())
+        }
+    }
+}
 
 pub trait JobRules<JS: JobStateValues, TS: TaskStateValues>: Send + Sync + 'static {
     fn task_filters(&self) -> TaskFilters<JS, TS>;
@@ -73,11 +100,7 @@ pub struct Link {
 
 impl Link {
     pub fn host(&self) -> Option<String> {
-        let host = self.url.host();
-        if host.is_none() {
-            return None
-        }
-        Some(host.unwrap().to_string().trim().to_lowercase().to_string())
+        Some(self.url.host()?.to_string().trim().to_lowercase())
     }
 }
 
@@ -239,7 +262,7 @@ impl StatusData {
 
 impl Link {
     pub(crate) fn new(href: String, alt: String, text: String, redirect: usize, target: LinkTarget, parent: &Link) -> Result<Self> {
-        let link_str = href.splitn(2, "#").next().context("cannot prepare link")?;
+        let link_str = href.splitn(2, '#').next().context("cannot prepare link")?;
 
         let url = Url::parse(link_str).unwrap_or(
             parent.url.join(link_str).with_context(|| format!("cannot join relative href {} to {}", href, parent.url.as_str()))?
@@ -308,7 +331,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
 
                     let load_section = match &r.as_ref().unwrap().load_data {
                         LoadResult::None => {
-                            format!("none")
+                            String::from("none")
                         },
                         LoadResult::Ok(ld) => {
                             let lm = &ld.load_metrics;

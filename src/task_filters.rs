@@ -38,6 +38,7 @@ pub struct PageLevelTaskFilter {
     max_level: usize,
 }
 
+#[derive(Default)]
 pub struct HashSetDedupTaskFilter {
     visited: std::collections::HashSet<String>,
 }

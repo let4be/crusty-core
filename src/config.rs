@@ -29,7 +29,7 @@ impl Deref for CLevel {
 impl<'de> Deserialize<'de> for CLevel {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CLevel, D::Error> {
         let s: String = Deserialize::deserialize(deserializer)?;
-        Level::from_str(&s).map(|e|CLevel(e)).map_err(de::Error::custom)
+        Level::from_str(&s).map(CLevel).map_err(de::Error::custom)
     }
 }
 
