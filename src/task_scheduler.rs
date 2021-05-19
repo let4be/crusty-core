@@ -51,7 +51,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     async fn schedule(&mut self, tasks: Vec<Task>) {
         self.pages_pending += tasks.len();
         for task in tasks {
-            let _ = self.tasks_tx.send(task).await;
+            //we use try_send as it's faster and channel is unbounded
+            let r = self.tasks_tx.try_send(task);
+            if r.is_err() {
+                panic!("cannot send task to tasks_tx! should never ever happen!")
+            }
         }
     }
 
