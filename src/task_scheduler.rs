@@ -5,7 +5,7 @@ use crate::{types::*, config, task_filters, task_filters::TaskFilterResult};
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
     task_filters: TaskFilters<JS, TS>,
     settings: config::CrawlerSettings,
-    job_ctx: StdJobContext<JS, TS>,
+    job_ctx: JobContext<JS, TS>,
 
     root_task: Task,
     task_seq_num: usize,
@@ -23,7 +23,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         url: &Url,
         rules: Arc<BoxedJobRules<JS, TS>>,
         settings: &config::CrawlerSettings,
-        job_context: StdJobContext<JS, TS>,
+        job_context: JobContext<JS, TS>,
         update_tx: Sender<JobUpdate<JS, TS>>
     ) -> Result<TaskScheduler<JS, TS>> {
         let root_task = Task::new_root(&url)?;
@@ -126,7 +126,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         let _ = self.update_tx.send(task_response).await;
     }
 
-    pub(crate) fn go(&mut self) -> PinnedFut<JobUpdate<JS, TS>> {
+    pub(crate) fn go(&mut self) -> PinnedTask<JobUpdate<JS, TS>> {
         TracingTask::new(span!(Level::INFO), async move {
             trace!(
                 soft_timeout_ms = self.settings.job_soft_timeout.as_millis() as u32,

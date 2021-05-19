@@ -4,8 +4,12 @@ use crusty_core::{
     CrawlingRulesOptions,
     Crawler,
     expanders::TaskExpander,
-    types::async_channel::Receiver,
-    types,
+    types::{
+        JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
+        select::predicate::Name, select::document::Document,
+        async_channel::unbounded,
+        async_channel::Receiver
+    },
     config,
 };
 
@@ -31,7 +35,7 @@ impl fmt::Display for JobState {
     }
 }
 
-impl types::JobStateValues for JobState {
+impl JobStateValues for JobState {
     fn finalize(&mut self) {
         self.duplicate_titles = self.duplicate_titles.iter().filter_map(|(k, v)|{
             if v.len() < 2 { None } else { Some((k.clone(), v.clone())) }
@@ -47,13 +51,13 @@ pub struct TaskState {
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
     fn expand(&self,
-              ctx: &mut types::StdJobContext<JobState, TaskState>,
-              task: &types::Task,
-              _status: &types::Status,
-              document: &types::select::document::Document)
+              ctx: &mut JobContext<JobState, TaskState>,
+              task: &Task,
+              _status: &HttpStatus,
+              document: &Document)
     {
         let title = document
-            .find(types::select::predicate::Name("title")).next().map(|v|v.text());
+            .find(Name("title")).next().map(|v|v.text());
         if title.is_some() {
             let title = title.unwrap();
             ctx.task_state.lock().unwrap().title = title.clone();
@@ -71,10 +75,10 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
     }
 }
 
-async fn process_responses(rx: Receiver<types::JobUpdate<JobState, TaskState>>) {
+async fn process_responses(rx: Receiver<JobUpdate<JobState, TaskState>>) {
     while let Ok(r) = rx.recv().await {
         info!("- {}, task context: {:?}", r, r.context.task_state);
-        if let types::JobStatus::Finished(_) = r.status {
+        if let JobStatus::Finished(_) = r.status {
             info!("final context: {}", r.context.job_state.lock().unwrap());
         }
     }
@@ -112,7 +116,7 @@ async fn main() -> Result<()> {
 
     let crawler = Crawler::<JobState, TaskState, _>::new(crawler_settings, networking_profile, Box::new(rules));
 
-    let (update_tx, update_rx) = types::async_channel::unbounded();
+    let (update_tx, update_rx) = unbounded();
 
     let h_sub = tokio::spawn(process_responses(update_rx));
 

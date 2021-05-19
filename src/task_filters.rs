@@ -13,7 +13,7 @@ pub trait TaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &mut self,
-        ctx: &mut rt::StdJobContext<JS, TS>,
+        ctx: &mut rt::JobContext<JS, TS>,
         task_seq_num: usize,
         task: &rt::Task,
     ) -> TaskFilterResult;
@@ -46,7 +46,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Sam
     fn name(&self) -> &'static str {
         "SameDomainTaskFilter"
     }
-    fn accept(&mut self, ctx: &mut rt::StdJobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
         if task.link.target == rt::LinkTarget::Load {
             return TaskFilterResult::Accept;
         }
@@ -77,7 +77,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Pag
     fn name(&self) -> &'static str {
         "PageBudgetTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, _: usize, _: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, _: &rt::Task) -> TaskFilterResult {
         if self.budget >= self.allocated_budget {
             return TaskFilterResult::Term;
         }
@@ -99,7 +99,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Lin
     fn name(&self) -> &'static str {
         "LinkPerPageBudgetTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, seq_num: usize, _: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, seq_num: usize, _: &rt::Task) -> TaskFilterResult {
         if seq_num > self.current_task_seq_num {
             self.links_within_current_task = 0;
         }
@@ -125,7 +125,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Pag
     fn name(&self) -> &'static str {
         "PageLevelTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
         if task.level >= self.max_level {
             return TaskFilterResult::Term;
         }
@@ -143,7 +143,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Has
     fn name(&self) -> &'static str {
         "HashSetDedupTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
         if self.visited.contains(task.link.url.as_str()) {
             return TaskFilterResult::Skip;
         }

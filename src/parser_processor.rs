@@ -19,7 +19,7 @@ impl ParserProcessor {
         (Self {concurrency: concurrency_profile.parser_concurrency, stack_size_bytes, rx}, tx)
     }
 
-    fn process(&self, n: usize) -> PinnedFut {
+    fn process(&self, n: usize) -> PinnedTask {
         TracingTask::new(span!(Level::INFO, n=n), async move {
             while let Ok(task) = futures_lite::future::block_on(self.rx.recv()) {
                 if task.res_tx.is_closed() {

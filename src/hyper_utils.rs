@@ -11,13 +11,17 @@ use hyper::{
     service::Service,
     Uri,
 };
+use tokio::io::{
+    ReadBuf,
+    AsyncRead,
+    AsyncWrite
+};
 use pin_project::pin_project;
-use tokio::io::{ReadBuf, AsyncRead, AsyncWrite};
 
 #[derive(Clone, Debug)]
 pub struct Stats {
-    read : Arc<Mutex<usize>>,
-    write : Arc<Mutex<usize>>,
+    read: Arc<Mutex<usize>>,
+    write: Arc<Mutex<usize>>,
 }
 
 impl Stats {
@@ -165,8 +169,7 @@ impl<R> Service<Uri> for CountingConnector<R> where
 }
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
-type BoxedFut<T> = Pin<Box<dyn Future<Output = Result<CountingStream<T>, BoxError>> + Send>>;
-pub struct Connecting<T>(BoxedFut<T>);
+pub struct Connecting<T>(PinnedFut<Result<CountingStream<T>, BoxError>>);
 
 impl<T: AsyncRead + AsyncWrite + Unpin> Future for Connecting<T> {
     type Output = Result<CountingStream<T>, BoxError>;

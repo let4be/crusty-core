@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     expanders::TaskExpander,
     types::{
-        JobStateValues, StdJobContext, Task, Status as HttpStatus, JobStatus,
+        JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus,
         select::predicate::Name, select::document::Document
     },
     config,
@@ -28,7 +28,7 @@ pub struct TaskState {
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
     fn expand(
-        &self, ctx: &mut StdJobContext<JobState, TaskState>,
+        &self, ctx: &mut JobContext<JobState, TaskState>,
         _task: &Task, _status: &HttpStatus, document: &Document
     ) {
         let title = document.find(Name("title")).next().map(|v|v.text());

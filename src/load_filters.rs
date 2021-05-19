@@ -11,7 +11,7 @@ pub trait LoadFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,
-        ctx: &rt::StdJobContext<JS, TS>,
+        ctx: &rt::JobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
     ) -> LoadFilterAction;

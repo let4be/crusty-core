@@ -11,7 +11,7 @@ pub trait StatusFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,
-        ctx: &mut rt::StdJobContext<JS, TS>,
+        ctx: &mut rt::JobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
     ) -> StatusFilterAction;
@@ -26,7 +26,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for C
     fn name(&self) -> &'static str { "ContentTypeFilter" }
     fn accept(
         &self,
-        _ctx: &mut rt::StdJobContext<JS, TS>,
+        _ctx: &mut rt::JobContext<JS, TS>,
         _task: &rt::Task,
         status: &rt::Status,
     ) -> StatusFilterAction {
@@ -70,7 +70,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for R
     fn name(&self) -> &'static str { "RedirectLoadFilter" }
     fn accept(
         &self,
-        ctx: &mut rt::StdJobContext<JS, TS>,
+        ctx: &mut rt::JobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
     ) -> StatusFilterAction {

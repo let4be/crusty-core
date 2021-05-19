@@ -1,5 +1,7 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
+pub use select;
+pub use async_channel;
 use crate::{
     task_filters,
     status_filters,
@@ -9,8 +11,6 @@ use crate::{
 
 use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
-pub use select;
-pub use async_channel;
 
 pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::TaskFilter<JS, TS> + Send + Sync>>;
 pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::StatusFilter<JS, TS> + Send + Sync>>;
@@ -59,6 +59,8 @@ impl fmt::Display for LinkTarget {
         write!(f, "{:?}", self)
     }
 }
+
+pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 
 #[derive(Clone)]
 pub struct Link {
@@ -154,7 +156,7 @@ pub struct Task {
 pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
     pub task: Arc<Task>,
     pub status: JobStatus,
-    pub context: StdJobContext<JS, TS>
+    pub context: JobContext<JS, TS>
 }
 
 pub struct ParserTask {
@@ -179,7 +181,7 @@ pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {
 impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
 #[derive(Clone)]
-pub struct StdJobContext<JS, TS> {
+pub struct JobContext<JS, TS> {
     pub started_at : Instant,
     pub root_url : Url,
     pub job_state: Arc<Mutex<JS>>,
@@ -187,7 +189,7 @@ pub struct StdJobContext<JS, TS> {
     links: Vec<Link>
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues> StdJobContext<JS, TS> {
+impl<JS: JobStateValues, TS: TaskStateValues> JobContext<JS, TS> {
     pub fn new(root_url: Url, job_state: JS, task_state: TS) -> Self {
         Self {
             started_at: Instant::now(),
@@ -198,7 +200,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> StdJobContext<JS, TS> {
         }
     }
 
-    pub fn timeout_remaining(&self, t: Duration) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    pub fn timeout_remaining(&self, t: Duration) -> PinnedFut<()> {
         let elapsed = self.started_at.elapsed();
 
         Box::pin(async move {
@@ -213,24 +215,24 @@ impl<JS: JobStateValues, TS: TaskStateValues> StdJobContext<JS, TS> {
         self.links.extend(links)
     }
 
-    pub fn consume_links(&mut self, ) -> Vec<Link> {
-        let links = self.links.clone();
-        self.links.clear();
-        links
+    pub fn consume_links(&mut self) -> Vec<Link> {
+        self.links.drain(0..).collect()
     }
 }
 
+static EMPTY_LINKS: Vec<Link> = vec![];
+
 impl StatusData {
-    pub fn collect_links(&self) -> Box<dyn Iterator<Item = &Link> + Send + '_> {
-        let load_links_it: Box<dyn Iterator<Item = &Link> + Send> = if let LoadResult::Ok(load_data) = &self.load_data {
-            Box::new(load_data.links.iter())
+    pub fn collect_links(&self) -> LinkIter {
+        let load_links_it = if let LoadResult::Ok(load_data) = &self.load_data {
+            load_data.links.iter()
         } else {
-            Box::new(std::iter::empty::<&Link>())
+            EMPTY_LINKS.iter()
         };
-        let follow_links_it: Box<dyn Iterator<Item = &Link> + Send> = if let FollowResult::Ok(follow_data) = &self.follow_data {
-            Box::new(follow_data.links.iter())
+        let follow_links_it = if let FollowResult::Ok(follow_data) = &self.follow_data {
+            follow_data.links.iter()
         } else {
-            Box::new(std::iter::empty::<&Link>())
+            EMPTY_LINKS.iter()
         };
         Box::new(self.status.links.iter().chain(load_links_it).chain(follow_links_it))
     }
@@ -238,8 +240,7 @@ impl StatusData {
 
 impl Link {
     pub(crate) fn new(href: String, alt: String, text: String, redirect: usize, target: LinkTarget, parent: &Link) -> Result<Self> {
-        let s: Vec<&str> = href.splitn(2, "#").collect();
-        let link_str = if s.len() < 1 { href.as_str() } else { s[0] };
+        let link_str = href.splitn(2, "#").next().context("cannot prepare link")?;
 
         let url = Url::parse(link_str).unwrap_or(
             parent.url.join(link_str).with_context(|| format!("cannot join relative href {} to {}", href, parent.url.as_str()))?
@@ -247,8 +248,8 @@ impl Link {
 
         Ok(Self {
             url,
-            alt,
-            text,
+            alt: alt.trim().to_string(),
+            text: text.trim().to_string(),
             redirect,
             target
         })

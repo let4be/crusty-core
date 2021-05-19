@@ -18,10 +18,9 @@ use trust_dns_resolver::{
     TokioAsyncResolver
 };
 
-pub type PinnedFut<T> = Pin<Box<dyn Future<Output=Result<T, io::Error>> + Send>>;
 pub trait Resolver: Clone + Send + Sync + 'static {
     fn new_default() -> Result<Self, io::Error>;
-    fn resolve(&self, host: &str) -> PinnedFut<IntoIter<SocketAddr>>;
+    fn resolve(&self, host: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>>;
 }
 
 #[derive(Clone, Debug)]
@@ -42,7 +41,7 @@ impl Resolver for AsyncHyperResolver {
         Ok(Self{resolver})
     }
 
-    fn resolve(&self, name: &str) -> PinnedFut<IntoIter<SocketAddr>> {
+    fn resolve(&self, name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
         let resolver = Arc::clone(&self.resolver);
         let s_name  = String::from(name);
 

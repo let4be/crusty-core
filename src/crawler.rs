@@ -202,10 +202,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> Crawler<JS, TS, R> {
         job_state: JS,
         parse_tx: Sender<ParserTask>,
         update_tx: Sender<JobUpdate<JS, TS>>,
-    ) -> PinnedFut
+    ) -> PinnedTask
     {
         TracingTask::new(span!(Level::INFO, url=url.as_str()), async move {
-            let ctx = StdJobContext::new(url.clone(), job_state, TS::default());
+            let ctx = JobContext::new(url.clone(), job_state, TS::default());
 
             let mut scheduler = TaskScheduler::new(
                 &url,
@@ -295,7 +295,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
         Ok(())
     }
 
-    pub fn go(self) -> PinnedFut<'static> {
+    pub fn go(self) -> PinnedTask<'static> {
         TracingTask::new(span!(Level::INFO), async move {
             let mut handles = vec![];
             for _ in 0..self.concurrency_profile.domain_concurrency {

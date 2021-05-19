@@ -17,7 +17,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: Like
     load_filters: LoadFilters<JS, TS>,
     task_expanders: Arc<TaskExpanders<JS, TS>>,
     settings: config::CrawlerSettings,
-    job_ctx: StdJobContext<JS, TS>,
+    job_ctx: JobContext<JS, TS>,
 
     tx: Sender<JobUpdate<JS, TS>>,
     tasks_rx: Receiver<Vec<Task>>,
@@ -31,7 +31,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         url: &Url,
         rules: Arc<BoxedJobRules<JS, TS>>,
         settings: &config::CrawlerSettings,
-        job_context: StdJobContext<JS, TS>,
+        job_context: JobContext<JS, TS>,
         tx: Sender<JobUpdate<JS, TS>>,
         tasks_rx: Receiver<Vec<Task>>,
         parse_tx: Sender<ParserTask>,
@@ -263,7 +263,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         }));
     }
 
-    pub(crate) fn go(&mut self, n: usize) -> PinnedFut {
+    pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
         TracingTask::new(span!(Level::INFO, n=n, url=self.url.as_str()), async move {
             let (client, mut stats) = (self.client_factory)();
 
