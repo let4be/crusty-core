@@ -48,14 +48,13 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         })
     }
 
-    async fn schedule(&mut self, tasks: Vec<Task>) {
-        self.pages_pending += tasks.len();
-        for task in tasks {
-            //we use try_send as it's faster and channel is unbounded
-            let r = self.tasks_tx.try_send(task);
-            if r.is_err() {
-                panic!("cannot send task to tasks_tx! should never ever happen!")
-            }
+    fn schedule(&mut self, task: Task) {
+        self.pages_pending += 1;
+
+        //we use try_send as it's faster and channel is unbounded
+        let r = self.tasks_tx.try_send(task);
+        if r.is_err() {
+            panic!("cannot send task to tasks_tx! should never ever happen!")
         }
     }
 
@@ -96,7 +95,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             if let JobStatus::Processing(Ok(ref r)) = task_response.status {
                 let max_redirect = self.settings.max_redirect;
 
-                let tasks = r.collect_links()
+                let tasks :Vec<Task> = r.collect_links()
                     .filter_map(|link| {
                         if link.redirect > max_redirect {
                             info!(url = link.url.as_str(), "[max redirect]");
@@ -116,10 +115,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                             return None
                         }
                         Some(task)
-                    })
-                    .collect();
+                    }).collect();
 
-                self.schedule(tasks).await;
+                for task in tasks {
+                    self.schedule(task);
+                }
             }
         }
 
@@ -136,7 +136,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 
             let root_task= self.root_task.clone();
             if self.schedule_filter(&root_task) == TaskFilterResult::Accept {
-                self.schedule(vec![root_task]).await;
+                self.schedule(root_task);
             }
 
             let mut is_soft_timeout = false;
