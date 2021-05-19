@@ -20,19 +20,19 @@ use futures::Future;
 pub use select;
 pub use async_channel;
 
-pub type TaskFilters<JobState, TaskState> = Vec<Box<dyn task_filters::TaskFilter<JobState, TaskState> + Send + Sync>>;
-pub type StatusFilters<JobState, TaskState> = Vec<Box<dyn status_filters::StatusFilter<JobState, TaskState> + Send + Sync>>;
-pub type LoadFilters<JobState, TaskState> = Vec<Box<dyn load_filters::LoadFilter<JobState, TaskState> + Send + Sync>>;
-pub type TaskExpanders<JobState, TaskState> = Vec<Box<dyn expanders::TaskExpander<JobState, TaskState> + Send + Sync>>;
+pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::TaskFilter<JS, TS> + Send + Sync>>;
+pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::StatusFilter<JS, TS> + Send + Sync>>;
+pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::LoadFilter<JS, TS> + Send + Sync>>;
+pub type TaskExpanders<JS, TS> = Vec<Box<dyn expanders::TaskExpander<JS, TS> + Send + Sync>>;
 
-pub trait JobRules<JobState: JobStateValues, TaskState: TaskStateValues>: Send + Sync + 'static {
-    fn task_filters(&self) -> TaskFilters<JobState, TaskState>;
-    fn status_filters(&self) -> StatusFilters<JobState, TaskState>;
-    fn load_filters(&self) -> LoadFilters<JobState, TaskState>;
-    fn task_expanders(&self) -> TaskExpanders<JobState, TaskState>;
+pub trait JobRules<JS: JobStateValues, TS: TaskStateValues>: Send + Sync + 'static {
+    fn task_filters(&self) -> TaskFilters<JS, TS>;
+    fn status_filters(&self) -> StatusFilters<JS, TS>;
+    fn load_filters(&self) -> LoadFilters<JS, TS>;
+    fn task_expanders(&self) -> TaskExpanders<JS, TS>;
 }
 
-pub type BoxedJobRules<JobState, TaskState> = Box<dyn JobRules<JobState, TaskState>>;
+pub type BoxedJobRules<JS, TS> = Box<dyn JobRules<JS, TS>>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -186,10 +186,10 @@ pub struct Task {
     pub level: usize,
 }
 
-pub struct JobUpdate<JobState: JobStateValues, TaskState: TaskStateValues> {
+pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
     pub task: Arc<Task>,
     pub status: JobStatus,
-    pub context: StdJobContext<JobState, TaskState>
+    pub context: StdJobContext<JS, TS>
 }
 
 pub struct ParserTask {
@@ -214,16 +214,16 @@ pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {
 impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
 #[derive(Clone)]
-pub struct StdJobContext<JobState, TaskState> {
+pub struct StdJobContext<JS, TS> {
     pub started_at : Instant,
     pub root_url : Url,
-    pub job_state: Arc<Mutex<JobState>>,
-    pub task_state: Arc<Mutex<TaskState>>,
+    pub job_state: Arc<Mutex<JS>>,
+    pub task_state: Arc<Mutex<TS>>,
     links: Vec<Link>
 }
 
-impl<JobState: JobStateValues, TaskState: TaskStateValues> StdJobContext<JobState, TaskState> {
-    pub fn new(root_url: Url, job_state: JobState, task_state: TaskState) -> Self {
+impl<JS: JobStateValues, TS: TaskStateValues> StdJobContext<JS, TS> {
+    pub fn new(root_url: Url, job_state: JS, task_state: TS) -> Self {
         Self {
             started_at: Instant::now(),
             root_url,
@@ -331,7 +331,7 @@ impl Task {
     }
 }
 
-impl<T: JobStateValues, TT: TaskStateValues> fmt::Display for JobUpdate<T,TT> {
+impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.status {
             JobStatus::Processing(ref r) => {

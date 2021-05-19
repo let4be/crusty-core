@@ -2,10 +2,10 @@
 use crate::prelude::*;
 use crate::types as rt;
 
-pub trait TaskExpander<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> {
+pub trait TaskExpander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn expand(
         &self,
-        ctx: &mut rt::StdJobContext<JobState, TaskState>,
+        ctx: &mut rt::StdJobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
         document: &select::document::Document,
@@ -14,10 +14,10 @@ pub trait TaskExpander<JobState: rt::JobStateValues, TaskState: rt::TaskStateVal
 
 pub struct FollowLinks {}
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskExpander<JobState, TaskState> for FollowLinks {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for FollowLinks {
     fn expand(
         &self,
-        ctx: &mut rt::StdJobContext<JobState, TaskState>,
+        ctx: &mut rt::StdJobContext<JS, TS>,
         task: &rt::Task,
         _status: &rt::Status,
         document: &select::document::Document,
@@ -45,10 +45,10 @@ impl FollowLinks {
 
 pub struct LoadImages {}
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskExpander<JobState, TaskState> for LoadImages {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for LoadImages {
     fn expand(
         &self,
-        ctx: &mut rt::StdJobContext<JobState, TaskState>,
+        ctx: &mut rt::StdJobContext<JS, TS>,
         task: &rt::Task,
         _status: &rt::Status,
         document: &select::document::Document,

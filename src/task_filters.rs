@@ -9,11 +9,11 @@ pub enum TaskFilterResult {
     Term,
 }
 
-pub trait TaskFilter<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> {
+pub trait TaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &mut self,
-        ctx: &mut rt::StdJobContext<JobState, TaskState>,
+        ctx: &mut rt::StdJobContext<JS, TS>,
         task_seq_num: usize,
         task: &rt::Task,
     ) -> TaskFilterResult;
@@ -42,11 +42,11 @@ pub struct HashSetDedupTaskFilter {
     visited: std::collections::HashSet<String>,
 }
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskFilter<JobState, TaskState> for SameDomainTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for SameDomainTaskFilter {
     fn name(&self) -> &'static str {
         "SameDomainTaskFilter"
     }
-    fn accept(&mut self, ctx: &mut rt::StdJobContext<JobState, TaskState>, _: usize, task: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, ctx: &mut rt::StdJobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
         if task.link.target == rt::LinkTarget::Load {
             return TaskFilterResult::Accept;
         }
@@ -73,11 +73,11 @@ impl SameDomainTaskFilter {
     }
 }
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskFilter<JobState, TaskState> for PageBudgetTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageBudgetTaskFilter {
     fn name(&self) -> &'static str {
         "PageBudgetTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JobState, TaskState>, _: usize, _: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, _: usize, _: &rt::Task) -> TaskFilterResult {
         if self.budget >= self.allocated_budget {
             return TaskFilterResult::Term;
         }
@@ -95,11 +95,11 @@ impl PageBudgetTaskFilter {
     }
 }
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskFilter<JobState, TaskState> for LinkPerPageBudgetTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for LinkPerPageBudgetTaskFilter {
     fn name(&self) -> &'static str {
         "LinkPerPageBudgetTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JobState, TaskState>, seq_num: usize, _: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, seq_num: usize, _: &rt::Task) -> TaskFilterResult {
         if seq_num > self.current_task_seq_num {
             self.links_within_current_task = 0;
         }
@@ -121,11 +121,11 @@ impl LinkPerPageBudgetTaskFilter {
     }
 }
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskFilter<JobState, TaskState> for PageLevelTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageLevelTaskFilter {
     fn name(&self) -> &'static str {
         "PageLevelTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JobState, TaskState>, _: usize, task: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
         if task.level >= self.max_level {
             return TaskFilterResult::Term;
         }
@@ -139,11 +139,11 @@ impl PageLevelTaskFilter {
     }
 }
 
-impl<JobState: rt::JobStateValues, TaskState: rt::TaskStateValues> TaskFilter<JobState, TaskState> for HashSetDedupTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for HashSetDedupTaskFilter {
     fn name(&self) -> &'static str {
         "HashSetDedupTaskFilter"
     }
-    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JobState, TaskState>, _: usize, task: &rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::StdJobContext<JS, TS>, _: usize, task: &rt::Task) -> TaskFilterResult {
         if self.visited.contains(task.link.url.as_str()) {
             return TaskFilterResult::Skip;
         }

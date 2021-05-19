@@ -17,32 +17,32 @@ impl<T: hyper::client::connect::Connect + Clone + Send + Sync + 'static> LikeHtt
 
 pub(crate) type ClientFactory<C> = Box<dyn Fn() -> (hyper::Client<C>, hyper_utils::Stats) + Send + Sync + 'static>;
 
-pub(crate) struct TaskProcessor<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector> {
+pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> {
     url: Url,
-    status_filters: StatusFilters<JobState, TaskState>,
-    load_filters: LoadFilters<JobState, TaskState>,
-    task_expanders: Arc<TaskExpanders<JobState, TaskState>>,
+    status_filters: StatusFilters<JS, TS>,
+    load_filters: LoadFilters<JS, TS>,
+    task_expanders: Arc<TaskExpanders<JS, TS>>,
     settings: config::CrawlerSettings,
-    job_ctx: StdJobContext<JobState, TaskState>,
+    job_ctx: StdJobContext<JS, TS>,
 
-    tx: Sender<JobUpdate<JobState, TaskState>>,
+    tx: Sender<JobUpdate<JS, TS>>,
     tasks_rx: Receiver<Vec<Task>>,
     parse_tx: Sender<ParserTask>,
     client_factory: ClientFactory<C>,
 }
 
-impl<JobState: JobStateValues, TaskState: TaskStateValues, C: LikeHttpConnector> TaskProcessor<JobState, TaskState, C>
+impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcessor<JS, TS, C>
 {
     pub(crate) fn new(
         url: &Url,
-        rules: Arc<BoxedJobRules<JobState, TaskState>>,
+        rules: Arc<BoxedJobRules<JS, TS>>,
         settings: &config::CrawlerSettings,
-        job_context: StdJobContext<JobState, TaskState>,
-        tx: Sender<JobUpdate<JobState, TaskState>>,
+        job_context: StdJobContext<JS, TS>,
+        tx: Sender<JobUpdate<JS, TS>>,
         tasks_rx: Receiver<Vec<Task>>,
         parse_tx: Sender<ParserTask>,
         client_factory: ClientFactory<C>,
-    ) -> TaskProcessor<JobState, TaskState, C> {
+    ) -> TaskProcessor<JS, TS, C> {
         TaskProcessor {
             url: url.clone(),
             status_filters: rules.status_filters(),

@@ -7,11 +7,11 @@ pub enum LoadFilterAction {
     Term,
 }
 
-pub trait LoadFilter<T: rt::JobStateValues, TT: rt::TaskStateValues> {
+pub trait LoadFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,
-        ctx: &rt::StdJobContext<T, TT>,
+        ctx: &rt::StdJobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
     ) -> LoadFilterAction;

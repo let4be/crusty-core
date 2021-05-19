@@ -6,10 +6,10 @@ use std::sync::{Arc};
 
 use url::Url;
 
-pub(crate) struct TaskScheduler<JobState: JobStateValues, TaskState: TaskStateValues> {
-    task_filters: TaskFilters<JobState, TaskState>,
+pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
+    task_filters: TaskFilters<JS, TS>,
     settings: config::CrawlerSettings,
-    job_ctx: StdJobContext<JobState, TaskState>,
+    job_ctx: StdJobContext<JS, TS>,
 
     root_task: Task,
     task_seq_num: usize,
@@ -17,22 +17,22 @@ pub(crate) struct TaskScheduler<JobState: JobStateValues, TaskState: TaskStateVa
 
     tasks_tx: Sender<Vec<Task>>,
     pub(crate) tasks_rx: Receiver<Vec<Task>>,
-    pub(crate) job_update_tx: Sender<JobUpdate<JobState, TaskState>>,
-    job_update_rx: Receiver<JobUpdate<JobState, TaskState>>,
-    update_tx: Sender<JobUpdate<JobState, TaskState>>,
+    pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
+    job_update_rx: Receiver<JobUpdate<JS, TS>>,
+    update_tx: Sender<JobUpdate<JS, TS>>,
 }
 
-impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobState, TaskState> {
+impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     pub(crate) fn new(
         url: &Url,
-        rules: Arc<BoxedJobRules<JobState, TaskState>>,
+        rules: Arc<BoxedJobRules<JS, TS>>,
         settings: &config::CrawlerSettings,
-        job_context: StdJobContext<JobState, TaskState>,
-        update_tx: Sender<JobUpdate<JobState, TaskState>>
-    ) -> Result<TaskScheduler<JobState, TaskState>> {
+        job_context: StdJobContext<JS, TS>,
+        update_tx: Sender<JobUpdate<JS, TS>>
+    ) -> Result<TaskScheduler<JS, TS>> {
         let root_task = Task::new_root(&url)?;
 
-        let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JobState, TaskState>>();
+        let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
         let (tasks_tx, tasks_rx) = unbounded_ch::<Vec<Task>>();
 
         Ok(TaskScheduler {
@@ -86,7 +86,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobStat
         task_filters::TaskFilterResult::Accept
     }
 
-    async fn process_task_response(&mut self, task_response: JobUpdate<JobState, TaskState>, ignore_links: bool) {
+    async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
         self.pages_pending -= 1;
         self.task_seq_num += 1;
 
@@ -130,7 +130,7 @@ impl<JobState: JobStateValues, TaskState: TaskStateValues> TaskScheduler<JobStat
         let _ = self.update_tx.send(task_response).await;
     }
 
-    pub(crate) fn go(&mut self) -> PinnedFut<JobUpdate<JobState, TaskState>> {
+    pub(crate) fn go(&mut self) -> PinnedFut<JobUpdate<JS, TS>> {
         TracingTask::new(span!(Level::INFO), async move {
             trace!(
                 soft_timeout_ms = self.settings.job_soft_timeout.as_millis() as u32,
