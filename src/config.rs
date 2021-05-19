@@ -157,13 +157,23 @@ impl Default for NetworkingProfileValues {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
     pub values: NetworkingProfileValues,
 
     #[serde(skip)]
     #[serde(default = "Option::default")]
     pub resolver: Option<Arc<R>>
+}
+
+// apparently need to manually define this, because rust wants user to manually specify types otherwise
+impl Default for NetworkingProfile {
+    fn default() -> Self {
+        Self{
+            values: NetworkingProfileValues::default(),
+            resolver: None
+        }
+    }
 }
 
 impl<R: Resolver> NetworkingProfile<R> {

@@ -119,6 +119,7 @@ async fn main() -> Result<()> {
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
     crawler.go(url, JobState::default(), tx_pp, update_tx).await?;
 
-    let _ = tokio::join!(h_pp, h_sub);
+    let _ = h_pp.await?;
+    let _ = h_sub.await?;
     Ok(())
 }
