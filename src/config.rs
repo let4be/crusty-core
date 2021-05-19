@@ -251,7 +251,7 @@ impl Default for CrawlerSettings {
             custom_headers: [
                 (
                     http::header::USER_AGENT.to_string(),
-                    vec!["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.128 Safari/537.36".into()],
+                    vec!["Crusty-core Web Crawler".into()],
                 ),
                 (
                     http::header::ACCEPT.to_string(),
