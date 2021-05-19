@@ -11,8 +11,8 @@ pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
     task_seq_num: usize,
     pages_pending: usize,
 
-    tasks_tx: Sender<Vec<Task>>,
-    pub(crate) tasks_rx: Receiver<Vec<Task>>,
+    tasks_tx: Sender<Task>,
+    pub(crate) tasks_rx: Receiver<Task>,
     pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
     job_update_rx: Receiver<JobUpdate<JS, TS>>,
     update_tx: Sender<JobUpdate<JS, TS>>,
@@ -29,7 +29,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         let root_task = Task::new_root(&url)?;
 
         let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
-        let (tasks_tx, tasks_rx) = unbounded_ch::<Vec<Task>>();
+        let (tasks_tx, tasks_rx) = unbounded_ch::<Task>();
 
         Ok(TaskScheduler {
             settings: settings.clone(),
@@ -50,7 +50,9 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 
     async fn schedule(&mut self, tasks: Vec<Task>) {
         self.pages_pending += tasks.len();
-        let _ = self.tasks_tx.send(tasks).await.unwrap();
+        for task in tasks {
+            let _ = self.tasks_tx.send(task).await;
+        }
     }
 
     fn schedule_filter(&mut self, task: &Task) -> task_filters::TaskFilterResult  {

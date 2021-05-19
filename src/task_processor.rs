@@ -20,7 +20,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: Like
     job_ctx: JobContext<JS, TS>,
 
     tx: Sender<JobUpdate<JS, TS>>,
-    tasks_rx: Receiver<Vec<Task>>,
+    tasks_rx: Receiver<Task>,
     parse_tx: Sender<ParserTask>,
     client_factory: ClientFactory<C>,
 }
@@ -33,7 +33,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         settings: &config::CrawlerSettings,
         job_context: JobContext<JS, TS>,
         tx: Sender<JobUpdate<JS, TS>>,
-        tasks_rx: Receiver<Vec<Task>>,
+        tasks_rx: Receiver<Task>,
         parse_tx: Sender<ParserTask>,
         client_factory: ClientFactory<C>,
     ) -> TaskProcessor<JS, TS, C> {
@@ -267,36 +267,34 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         TracingTask::new(span!(Level::INFO, n=n, url=self.url.as_str()), async move {
             let (client, mut stats) = (self.client_factory)();
 
-            while let Ok(tasks) = self.tasks_rx.recv().await {
+            while let Ok(task) = self.tasks_rx.recv().await {
                 if self.tasks_rx.is_closed() {
                     break
                 }
 
-                for task in tasks {
-                    let timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
+                let timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
 
-                    stats.reset();
+                stats.reset();
 
-                    let t = Arc::new(task);
-                    tokio::select! {
-                        status = self.process_task(Arc::clone(&t), &client, &stats) => {
-                            let ctx = self.job_ctx.clone();
+                let t = Arc::new(task);
+                tokio::select! {
+                    status = self.process_task(Arc::clone(&t), &client, &stats) => {
+                        let ctx = self.job_ctx.clone();
 
-                            let _ = self.tx.send(JobUpdate {
-                                task: Arc::clone(&t),
-                                status,
-                                context: ctx,
-                            }).await;
-                        }
-                        _ = timeout => break
+                        let _ = self.tx.send(JobUpdate {
+                            task: Arc::clone(&t),
+                            status,
+                            context: ctx,
+                        }).await;
                     }
+                    _ = timeout => break
+                }
 
-                    if self.settings.delay.as_millis() > 0 {
-                        let timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
-                        tokio::select! {
-                            _ = time::sleep(*self.settings.delay) => {}
-                            _ = timeout => break
-                        }
+                if self.settings.delay.as_millis() > 0 {
+                    let timeout = self.job_ctx.timeout_remaining(*self.settings.job_hard_timeout);
+                    tokio::select! {
+                        _ = time::sleep(*self.settings.delay) => {}
+                        _ = timeout => break
                     }
                 }
             }
