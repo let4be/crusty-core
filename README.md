@@ -1,7 +1,7 @@
 # Crusty-core - build your own web crawler!
  - multi-threaded && async on top of [tokio](https://github.com/tokio-rs/tokio)
  - highly customizable filtering at each and every step - status code/headers received, page downloaded, link filter
- - built on top of [hyper](https://github.com/hyperium/hyper) for additional speed and customizability  
+ - built on top of [hyper](https://github.com/hyperium/hyper) (http2 and gzip/deflate baked in)  
  - rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
  - observable with [tracing](https://github.com/tokio-rs/tracing)
  - lots of options, almost everything is configurable
@@ -11,7 +11,7 @@
 
 ### Install
 
-right now API is in active development, once it's a bit settled down I will release on crates.io with `0.1.0`
+right now API is still in development, once it's a bit settled down I will release on crates.io with `0.1.0`
 
 for now simply add this to your `Cargo.toml`
 ```
@@ -91,5 +91,9 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+### Notes
+
 Please see [examples](examples) for more complicated usage scenarios. 
 This crawler is more verbose than some others, but it allows incredible customization at each and every step.
+
+Broad web crawler built on top of `crusty-core` is coming soon ;)
