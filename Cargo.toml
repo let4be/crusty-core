@@ -14,7 +14,7 @@ debug-assertions = false
 opt-level = 3
 
 [dependencies]
-tracing-tools = {version = "~0.1.12", git = "https://github.com/let4be/tracing-tools", branch = "main"}
+tracing-tools = "~0.1.0"
 
 async-channel = "~1.6.1"
 futures-lite = "~1.11.3"
