@@ -87,39 +87,34 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         self.task_seq_num += 1;
 
         if !ignore_links {
-            match task_response.status {
-                JobStatus::Processing(ref r) => {
-                    if r.is_ok() {
-                        let r = r.as_ref().unwrap();
-                        let max_redirect = self.settings.max_redirect;
+            if let JobStatus::Processing(Ok(ref r)) = task_response.status {
+                let r = r.as_ref().unwrap();
+                let max_redirect = self.settings.max_redirect;
 
-                        let tasks = r.collect_links()
-                            .filter_map(|link| {
-                                if link.redirect > max_redirect {
-                                    info!(url = link.url.as_str(), "[max redirect]");
-                                    return None
-                                }
-                                Task::new(link.clone(), &task_response.task).ok()
-                            })
-                            .map(|task| {
-                                (self.schedule_filter(&task), task)
-                            })
-                            .take_while(|r|{
-                                r.0 != task_filters::TaskFilterResult::Term
-                            })
-                            .filter_map(|v| {
-                                let (r, task) = v;
-                                if r == task_filters::TaskFilterResult::Skip {
-                                    return None
-                                }
-                                Some(task)
-                            })
-                            .collect();
+                let tasks = r.collect_links()
+                    .filter_map(|link| {
+                        if link.redirect > max_redirect {
+                            info!(url = link.url.as_str(), "[max redirect]");
+                            return None
+                        }
+                        Task::new(link.clone(), &task_response.task).ok()
+                    })
+                    .map(|task| {
+                        (self.schedule_filter(&task), task)
+                    })
+                    .take_while(|r|{
+                        r.0 != task_filters::TaskFilterResult::Term
+                    })
+                    .filter_map(|v| {
+                        let (r, task) = v;
+                        if r == task_filters::TaskFilterResult::Skip {
+                            return None
+                        }
+                        Some(task)
+                    })
+                    .collect();
 
-                        self.schedule(tasks).await;
-                    }
-                }
-                _ => {}
+                self.schedule(tasks).await;
             }
         }
 
