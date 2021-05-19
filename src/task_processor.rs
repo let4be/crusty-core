@@ -2,15 +2,9 @@
 use crate::prelude::*;
 use crate::{types::*, config, status_filters, load_filters, hyper_utils};
 
-use std::{
-    sync::{Arc},
-    str::FromStr
-};
-
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
-use url::Url;
 
 pub(crate) trait LikeHttpConnector: hyper::client::connect::Connect + Clone + Send + Sync + 'static {}
 impl<T: hyper::client::connect::Connect + Clone + Send + Sync + 'static> LikeHttpConnector for T{}

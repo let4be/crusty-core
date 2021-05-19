@@ -2,10 +2,6 @@
 use crate::prelude::*;
 use crate::{types::*, config, task_filters, task_filters::TaskFilterResult};
 
-use std::sync::{Arc};
-
-use url::Url;
-
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
     task_filters: TaskFilters<JS, TS>,
     settings: config::CrawlerSettings,

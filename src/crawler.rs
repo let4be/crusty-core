@@ -14,12 +14,9 @@ use crate::{
 };
 
 use std::{
-    sync::{Arc},
     net::{IpAddr},
 };
 
-use futures::{future};
-use url::Url;
 use tokio::task::JoinHandle;
 
 #[derive(Clone)]

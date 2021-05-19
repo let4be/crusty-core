@@ -1,9 +1,9 @@
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use std::{
     io,
-    pin::Pin,
     task::{Context, Poll},
-    sync::{Arc, Mutex},
-    future::Future
 };
 
 use hyper::{

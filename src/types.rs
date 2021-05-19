@@ -7,16 +7,8 @@ use crate::{
     expanders
 };
 
-use std::{
-    sync::{Arc, Mutex},
-    fmt,
-    pin::Pin,
-};
-
-use url::Url;
 use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
-use futures::Future;
 pub use select;
 pub use async_channel;
 

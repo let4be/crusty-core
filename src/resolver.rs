@@ -3,19 +3,20 @@ use crate::prelude::*;
 
 use std::{
     io,
-    pin::Pin,
     task::{Context, Poll},
-    future::Future,
     net::SocketAddr,
     net::ToSocketAddrs,
-    sync::Arc
+    vec::IntoIter,
 };
 
-use hyper::client::connect::dns::Name;
-use hyper::service::Service;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::TokioAsyncResolver;
-use std::vec::IntoIter;
+use hyper::{
+    client::connect::dns::Name,
+    service::Service
+};
+use trust_dns_resolver::{
+    config::{ResolverConfig, ResolverOpts},
+    TokioAsyncResolver
+};
 
 pub type PinnedFut<T> = Pin<Box<dyn Future<Output=Result<T, io::Error>> + Send>>;
 pub trait Resolver: Clone + Send + Sync + 'static {

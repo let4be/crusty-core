@@ -7,11 +7,8 @@ use crate::{
 };
 
 use std::{
-    fmt, collections::HashMap,
     net::{Ipv4Addr, Ipv6Addr},
     ops::Deref,
-    str::FromStr,
-    sync::Arc
 };
 
 use serde::{Deserialize, Deserializer, de};
