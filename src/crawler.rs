@@ -245,7 +245,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> Crawler<JS, TS, R> {
             drop(scheduler);
 
             trace!("Waiting for workers to finish...");
-            futures::future::join_all(processor_handles).await;
+            for h in processor_handles {
+                let _ = h.await?;
+            }
             trace!("Workers are done - sending notification about job done!");
 
             let _ = update_tx.send(job_finishing_update).await;
@@ -307,7 +309,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
                 handles.push(h);
             }
 
-            let _ = future::join_all(handles).await;
+            for h in handles {
+                let _ = h.await?;
+            }
             Ok(())
         }).instrument()
     }
