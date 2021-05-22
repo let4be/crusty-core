@@ -6,7 +6,7 @@ use crate::{
     task_filters,
     status_filters,
     load_filters,
-    expanders,
+    task_expanders,
     config
 };
 
@@ -16,7 +16,7 @@ use thiserror::{self, Error};
 pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::TaskFilter<JS, TS> + Send + Sync>>;
 pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::StatusFilter<JS, TS> + Send + Sync>>;
 pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::LoadFilter<JS, TS> + Send + Sync>>;
-pub type TaskExpanders<JS, TS> = Vec<Box<dyn expanders::TaskExpander<JS, TS> + Send + Sync>>;
+pub type TaskExpanders<JS, TS> = Vec<Box<dyn task_expanders::TaskExpander<JS, TS> + Send + Sync>>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
     pub url: url::Url,

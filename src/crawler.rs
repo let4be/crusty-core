@@ -8,7 +8,7 @@ use crate::{
     task_filters,
     hyper_utils,
     status_filters,
-    expanders,
+    task_expanders,
     resolver::AsyncHyperResolverAdaptor,
     resolver::Resolver
 };
@@ -100,10 +100,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 
         let mut status_filters: StatusFilters<JS, TS> = vec![];
         if options.accepted_content_types.is_some() {
-            status_filters.push(Box::new(status_filters::ContentTypeFilter::new(options.accepted_content_types.clone().unwrap(), true)));
+            status_filters.push(Box::new(status_filters::ContentType::new(options.accepted_content_types.clone().unwrap(), true)));
         }
         if options.redirect_term_on_err.is_some() {
-            status_filters.push(Box::new(status_filters::RedirectStatusFilter::new(true)));
+            status_filters.push(Box::new(status_filters::Redirect::new(true)));
         }
         status_filters
     }
@@ -114,7 +114,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 
     fn task_expanders(&self) -> TaskExpanders<JS, TS> {
         let mut task_expanders : TaskExpanders<JS, TS> = vec![
-            Box::new(expanders::FollowLinks::new(self.options.link_target.clone())),
+            Box::new(task_expanders::FollowLinks::new(self.options.link_target.clone())),
         ];
         if self.custom_task_expanders.is_some() {
             let custom_task_expanders = self.custom_task_expanders.as_ref().unwrap();

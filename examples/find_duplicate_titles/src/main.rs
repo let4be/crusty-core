@@ -3,7 +3,7 @@ use crusty_core::{
     CrawlingRules,
     CrawlingRulesOptions,
     Crawler,
-    expanders::TaskExpander,
+    task_expanders::TaskExpander,
     types::{
         LinkTarget, Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
         select::predicate::Name, select::document::Document,

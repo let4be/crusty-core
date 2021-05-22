@@ -96,8 +96,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                     .map(|mut task| {
                         (self.schedule_filter(&mut task), task)
                     })
-                    .take_while(|(r, task)|{
-                        r != task_filters::Result::Term
+                    .take_while(|(r, _)|{
+                        *r != task_filters::Result::Term
                     })
                     .filter_map(|(r, task)| {
                         if r == task_filters::Result::Skip {

@@ -2,7 +2,7 @@
 use crate::prelude::*;
 use crate::types as rt;
 
-pub enum StatusFilterAction {
+pub enum Action {
     Skip,
     Term,
 }
@@ -14,84 +14,84 @@ pub trait StatusFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
         ctx: &mut rt::JobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
-    ) -> StatusFilterAction;
+    ) -> Action;
 }
 
-pub struct ContentTypeFilter {
+pub struct ContentType {
     accepted: Vec<String>,
     term_on_error: bool
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for ContentTypeFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for ContentType {
     fn name(&self) -> &'static str { "ContentTypeFilter" }
     fn accept(
         &self,
         _ctx: &mut rt::JobContext<JS, TS>,
         _task: &rt::Task,
         status: &rt::Status,
-    ) -> StatusFilterAction {
+    ) -> Action {
         let content_type = status.headers.get(http::header::CONTENT_TYPE);
         if content_type.is_none() {
             if self.term_on_error {
-                return StatusFilterAction::Term;
+                return Action::Term;
             }
-            return StatusFilterAction::Skip;
+            return Action::Skip;
         }
         let content_type = content_type.unwrap().to_str();
         if content_type.is_err() {
             if self.term_on_error {
-                return StatusFilterAction::Term;
+                return Action::Term;
             }
-            return StatusFilterAction::Skip;
+            return Action::Skip;
         }
         let content_type = content_type.unwrap();
 
         for ct in &self.accepted {
             if content_type.contains(ct) {
-                return StatusFilterAction::Skip;
+                return Action::Skip;
             }
         }
 
-        StatusFilterAction::Term
+        Action::Term
     }
 }
 
-impl ContentTypeFilter {
+impl ContentType {
     pub fn new(accepted: Vec<String>, term_on_error: bool) -> Self {
         Self {accepted, term_on_error }
     }
 }
 
-pub struct RedirectStatusFilter {
+pub struct Redirect {
     term_on_error: bool
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for RedirectStatusFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for Redirect {
     fn name(&self) -> &'static str { "RedirectLoadFilter" }
     fn accept(
         &self,
         ctx: &mut rt::JobContext<JS, TS>,
         task: &rt::Task,
         status: &rt::Status,
-    ) -> StatusFilterAction {
+    ) -> Action {
         let sc = status.status_code;
         if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
-            return StatusFilterAction::Skip;
+            return Action::Skip;
         }
 
         let location = status.headers.get(http::header::LOCATION);
         if location.is_none() {
             if self.term_on_error {
-                return StatusFilterAction::Term;
+                return Action::Term;
             }
-            return StatusFilterAction::Skip;
+            return Action::Skip;
         }
         let location = location.unwrap().to_str();
         if location.is_err() {
             if self.term_on_error {
-                return StatusFilterAction::Term;
+                return Action::Term;
             }
-            return StatusFilterAction::Skip;
+            return Action::Skip;
         }
         let location = location.unwrap();
 
@@ -106,17 +106,17 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for R
 
         if link.is_err() {
             if self.term_on_error {
-                return StatusFilterAction::Term;
+                return Action::Term;
             }
-            return StatusFilterAction::Skip;
+            return Action::Skip;
         }
 
         ctx.push_links(vec![link.unwrap()]);
-        StatusFilterAction::Skip
+        Action::Skip
     }
 }
 
-impl RedirectStatusFilter {
+impl Redirect {
     pub fn new(term_on_error: bool) -> Self {
         Self {term_on_error}
     }

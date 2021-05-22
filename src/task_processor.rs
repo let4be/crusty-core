@@ -107,11 +107,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         for filter in self.status_filters.iter() {
             let r = filter.accept(&mut self.job.ctx, &task, &status);
             match r {
-                status_filters::StatusFilterAction::Term => {
+                status_filters::Action::Term => {
                     term_by = Some(filter.name());
                     break
                 },
-                status_filters::StatusFilterAction::Skip => {}
+                status_filters::Action::Skip => {}
             }
         }
 
