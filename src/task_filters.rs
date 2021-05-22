@@ -23,7 +23,7 @@ pub struct SameDomain {
     strip_prefix: String,
 }
 
-pub struct PageBudget {
+pub struct TotalPageBudget {
     allocated_budget: usize,
     budget: usize,
 }
@@ -43,7 +43,7 @@ pub struct MaxRedirect {
 }
 
 #[derive(Default)]
-pub struct HashSetDedupTaskFilter {
+pub struct HashSetDedup {
     visited: std::collections::HashSet<String>,
 }
 
@@ -78,7 +78,7 @@ impl SameDomain {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageBudget {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for TotalPageBudget {
     fn name(&self) -> &'static str {
         "PageBudget"
     }
@@ -91,7 +91,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Pag
     }
 }
 
-impl PageBudget {
+impl TotalPageBudget {
     pub fn new(allocated_budget: usize) -> Self {
         Self {
             allocated_budget,
@@ -144,7 +144,7 @@ impl PageLevel {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for HashSetDedupTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for HashSetDedup {
     fn name(&self) -> &'static str {
         "HashSetDedup"
     }
@@ -158,7 +158,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Has
     }
 }
 
-impl HashSetDedupTaskFilter {
+impl HashSetDedup {
     pub fn new() -> Self {
         Self {
             visited: std::collections::HashSet::new(),

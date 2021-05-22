@@ -80,10 +80,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
         let mut task_filters: TaskFilters<JS, TS> = vec![
             Box::new(task_filters::MaxRedirect::new(options.max_redirect)),
             Box::new(task_filters::SameDomain::new(options.allow_www)),
-            Box::new(task_filters::HashSetDedupTaskFilter::new()),
+            Box::new(task_filters::HashSetDedup::new()),
         ];
         if options.page_budget.is_some() {
-            task_filters.push(Box::new(task_filters::PageBudget::new(options.page_budget.unwrap())));
+            task_filters.push(Box::new(task_filters::TotalPageBudget::new(options.page_budget.unwrap())));
         }
         if options.links_per_page_budget.is_some() {
             task_filters.push(Box::new(task_filters::LinkPerPageBudget::new(options.links_per_page_budget.unwrap())))
