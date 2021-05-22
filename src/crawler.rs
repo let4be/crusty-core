@@ -21,6 +21,7 @@ use tokio::task::JoinHandle;
 
 #[derive(Clone)]
 pub struct CrawlingRulesOptions {
+    pub link_target: LinkTarget,
     pub allow_www: bool,
     pub page_budget: Option<usize>,
     pub links_per_page_budget: Option<usize>,
@@ -32,6 +33,7 @@ pub struct CrawlingRulesOptions {
 impl Default for CrawlingRulesOptions{
     fn default() -> Self {
         Self {
+            link_target: LinkTarget::HeadFollow,
             allow_www: true,
             page_budget: Some(50),
             links_per_page_budget: Some(50),
@@ -109,7 +111,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 
     fn task_expanders(&self) -> TaskExpanders<JS, TS> {
         let mut task_expanders : TaskExpanders<JS, TS> = vec![
-            Box::new(expanders::FollowLinks::new()),
+            Box::new(expanders::FollowLinks::new(self.options.link_target.clone())),
         ];
         if self.custom_task_expanders.is_some() {
             let custom_task_expanders = self.custom_task_expanders.as_ref().unwrap();

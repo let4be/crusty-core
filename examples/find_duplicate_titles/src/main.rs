@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     expanders::TaskExpander,
     types::{
-        Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
+        LinkTarget, Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
         select::predicate::Name, select::document::Document,
         async_channel::unbounded,
         async_channel::Receiver
@@ -109,6 +109,7 @@ async fn main() -> Result<()> {
     let rules = Box::new(CrawlingRules {
         options: CrawlingRulesOptions{
             page_budget: Some(100),
+            link_target: LinkTarget::Follow,
             ..CrawlingRulesOptions::default()
         },
         ..CrawlingRules::default()}

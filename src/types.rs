@@ -77,8 +77,11 @@ pub enum JobError {
 
 #[derive(Clone, PartialEq, Debug )]
 pub enum LinkTarget {
+    Head, // todo: impl
     Load,
+    HeadLoad, // todo: impl
     Follow,
+    HeadFollow, // todo: impl
 }
 
 impl fmt::Display for LinkTarget {
@@ -131,6 +134,12 @@ pub struct FollowMetrics {
     pub parse_time: Duration,
 }
 
+pub enum StatusResult {
+    None,
+    Ok(Status),
+    Err(Error)
+}
+
 pub enum FollowResult {
     None,
     Ok(FollowData),
@@ -144,12 +153,13 @@ pub enum LoadResult {
 }
 
 pub struct LoadData {
-    pub load_metrics: LoadMetrics,
+    pub metrics: LoadMetrics,
     pub links: Vec<Link>
 }
 
 pub struct StatusData {
-    pub status: Status,
+    pub head_status: StatusResult,
+    pub status: StatusResult,
     pub load_data: LoadResult,
     pub follow_data: FollowResult
 }
@@ -164,7 +174,7 @@ pub struct JobData {
 }
 
 pub enum JobStatus {
-    Processing(Result<StatusData>),
+    Processing(StatusData),
     Finished(JobData)
 }
 
@@ -246,6 +256,16 @@ static EMPTY_LINKS: Vec<Link> = vec![];
 
 impl StatusData {
     pub fn collect_links(&self) -> LinkIter {
+        let head_status_links_it = if let StatusResult::Ok(status_data) = &self.head_status {
+            status_data.links.iter()
+        } else {
+            EMPTY_LINKS.iter()
+        };
+        let status_links_it = if let StatusResult::Ok(status_data) = &self.status {
+            status_data.links.iter()
+        } else {
+            EMPTY_LINKS.iter()
+        };
         let load_links_it = if let LoadResult::Ok(load_data) = &self.load_data {
             load_data.links.iter()
         } else {
@@ -256,7 +276,7 @@ impl StatusData {
         } else {
             EMPTY_LINKS.iter()
         };
-        Box::new(self.status.links.iter().chain(load_links_it).chain(follow_links_it))
+        Box::new(head_status_links_it.chain(status_links_it).chain(load_links_it).chain(follow_links_it))
     }
 }
 
@@ -317,54 +337,65 @@ impl Task {
     }
 }
 
+impl fmt::Display for StatusResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StatusResult::Ok(ref r) => {
+                write!(f, "[{}] wait {}ms / status {}ms", r.status_code, r.status_metrics.wait_time.as_millis(), r.status_metrics.status_time.as_millis())
+            },
+            StatusResult::Err(ref err) => {
+                write!(f, "[err]: {}", err.to_string())
+            },
+            _ => {
+                write!(f, "")
+            }
+        }
+    }
+}
+
+impl fmt::Display for LoadResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoadResult::Ok(ref r) => {
+                let m = &r.metrics;
+                write!(f, "loaded {}ms / write {} / read {}",
+                       m.load_time.as_millis(),
+                       m.write_size.file_size(file_size_opts::CONVENTIONAL).unwrap(),
+                       m.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap())
+            },
+            LoadResult::Err(ref err) => {
+                write!(f, "[err loading]: {}", err.to_string())
+            },
+            _ => {
+                write!(f, "none")
+            }
+        }
+    }
+}
+
+impl fmt::Display for FollowResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FollowResult::Ok(ref r) => {
+                let m = &r.metrics;
+                write!(f, "parsed {}ms",
+                       m.parse_time.as_millis())
+            },
+            FollowResult::Err(ref err) => {
+                write!(f, "[err following]: {}", err.to_string())
+            },
+            _ => {
+                write!(f, "none")
+            }
+        }
+    }
+}
+
 impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.status {
             JobStatus::Processing(ref r) => {
-                if r.is_ok() {
-                    let ld = r.as_ref().unwrap();
-                    let sm = &ld.status.status_metrics;
-                    let timings = format!("wait {}ms / status {}ms",
-                        sm.wait_time.as_millis(),
-                        sm.status_time.as_millis(),
-                    );
-
-                    let load_section = match &r.as_ref().unwrap().load_data {
-                        LoadResult::None => {
-                            String::from("none")
-                        },
-                        LoadResult::Ok(ld) => {
-                            let lm = &ld.load_metrics;
-                            format!("loaded {}ms / write {} / read {}",
-                                    lm.load_time.as_millis(),
-                                    lm.write_size.file_size(file_size_opts::CONVENTIONAL).unwrap(),
-                                    lm.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap(),
-                            )
-                        },
-                        LoadResult::Err(err) => {
-                            format!("[err] loading {}", err.to_string())
-                        }
-                    };
-
-                    let (header, follow_section) = match &r.as_ref().unwrap().follow_data {
-                        FollowResult::None => {
-                            (format!("[{}] loaded {}", ld.status.status_code, self.task), format!(""))
-                        },
-                        FollowResult::Ok(fd) => {
-                            (format!("[{}] followed {}", ld.status.status_code, self.task), format!("parsed {}ms", fd.metrics.parse_time.as_millis()))
-                        },
-                        FollowResult::Err(err) => {
-                            (format!("[{}] followed with err {}: {}", ld.status.status_code, self.task, err.to_string()), format!(""))
-                        }
-                    };
-
-                    write!(f, "{} ({}). (load: {}) | (follow: {})", header, timings, load_section, follow_section)
-                } else {
-                    write!(f, "[err] loading {} {}",
-                        r.as_ref().err().unwrap().to_string(),
-                        self.task
-                    )
-                }
+                write!(f, "{} {} (load: {}) | (follow: {})", r.head_status, r.status, r.load_data, r.follow_data)
             },
             JobStatus::Finished(ref r) => {
                 if r.err.is_some() {

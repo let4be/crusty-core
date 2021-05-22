@@ -12,8 +12,9 @@ pub trait TaskExpander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     );
 }
 
-#[derive(Default)]
-pub struct FollowLinks {}
+pub struct FollowLinks {
+    link_target: rt::LinkTarget
+}
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for FollowLinks {
     fn expand(
@@ -30,7 +31,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for F
                 String::from(n.attr("alt").unwrap_or("")),
                 n.text(),
                 0,
-                rt::LinkTarget::Follow,
+                self.link_target.clone(),
                 &task.link
                 ).ok())
             .collect();
@@ -39,13 +40,14 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for F
 }
 
 impl FollowLinks {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(link_target: rt::LinkTarget) -> Self {
+        Self {link_target}
     }
 }
 
-#[derive(Default)]
-pub struct LoadImages {}
+pub struct LoadImages {
+    link_target: rt::LinkTarget
+}
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for LoadImages {
     fn expand(
@@ -62,7 +64,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for L
                 String::from(n.attr("alt").unwrap_or("")),
                 n.text(),
                 0,
-                rt::LinkTarget::Load,
+                self.link_target.clone(),
                 &task.link
             ).ok())
             .collect();
@@ -71,8 +73,8 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for L
 }
 
 impl LoadImages {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(link_target: rt::LinkTarget) -> Self {
+        Self {link_target}
     }
 }
 

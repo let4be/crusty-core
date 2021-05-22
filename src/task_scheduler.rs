@@ -87,7 +87,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         self.task_seq_num += 1;
 
         if !ignore_links {
-            if let JobStatus::Processing(Ok(ref r)) = task_response.status {
+            if let JobStatus::Processing(ref r) = task_response.status {
                 let max_redirect = self.job.settings.max_redirect;
 
                 let tasks :Vec<Task> = r.collect_links()

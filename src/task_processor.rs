@@ -64,6 +64,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         &mut self,
         task: Arc<Task>,
         client: &hyper::Client<C>,
+        is_head: bool,
     ) -> Result<(Status, hyper::Response<hyper::Body>)> {
         let mut status_metrics = StatusMetrics{wait_time: task.queued_at.elapsed(), ..Default::default()};
 
@@ -73,7 +74,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         let t = Instant::now();
 
         let mut req = hyper::Request::builder();
-        req = req.uri(uri).method(hyper::Method::GET);
+        req = req.uri(uri).method(if is_head {hyper::Method::HEAD} else {hyper::Method::GET});
 
         for (n, v) in &self.job.settings.custom_headers {
             req = req.header(n, v[0].clone());
@@ -172,7 +173,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         }
 
         let load_data = LoadData{
-            load_metrics,
+            metrics: load_metrics,
             links: self.job.ctx.consume_links()
         };
         Ok((load_data, reader))
@@ -220,40 +221,58 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     }
 
 
-    async fn process_task(&mut self, task: Arc<Task>, client: &hyper::Client<C>, stats: &hyper_utils::Stats) -> JobStatus{
-        let status_r = self.status(Arc::clone(&task), &client).await;
-        if status_r.is_err() {
-            return JobStatus::Processing(Err(status_r.err().unwrap()));
+    async fn process_task(&mut self, task: Arc<Task>, client: &hyper::Client<C>, stats: &hyper_utils::Stats) -> StatusData{
+        let mut status = StatusData{
+            head_status: StatusResult::None,
+            status: StatusResult::None,
+            load_data: LoadResult::None,
+            follow_data: FollowResult::None
+        };
+        if task.link.target == LinkTarget::Head ||
+            task.link.target == LinkTarget::HeadLoad ||
+            task.link.target == LinkTarget::HeadFollow
+        {
+            let status_r = self.status(Arc::clone(&task), &client, true).await;
+            if status_r.is_err() {
+                status.head_status = StatusResult::Err(status_r.err().unwrap());
+                return status;
+            }
+            let (head_status, _) = status_r.unwrap();
+            status.head_status = StatusResult::Ok(head_status);
+        };
+        if task.link.target == LinkTarget::Head {
+            return status;
         }
 
-        let (status, resp) = status_r.unwrap();
+        let status_r = self.status(Arc::clone(&task), &client, false).await;
+        if status_r.is_err() {
+            status.status = StatusResult::Err(status_r.err().unwrap());
+            return status;
+        }
 
-        let load_r = self.load(Arc::clone(&task), &status, stats, resp).await;
+        let (get_status, resp) = status_r.unwrap();
+
+        let load_r = self.load(Arc::clone(&task), &get_status, stats, resp).await;
+        status.status = StatusResult::Ok(get_status.clone());
+
         if load_r.is_err() {
-            return JobStatus::Processing(Ok(StatusData{
-                status,
-                load_data: LoadResult::Err(load_r.err().unwrap()),
-                follow_data: FollowResult::None,
-            }));
+            status.load_data = LoadResult::Err(load_r.err().unwrap());
+            return status;
         }
 
         let (load_data, reader) = load_r.unwrap();
-
-        if task.link.target == LinkTarget::Follow {
-            let follow_r = self.follow(Arc::clone(&task), status.clone(), reader).await;
-
-            let follow_data = if follow_r.is_ok() { FollowResult::Ok(follow_r.unwrap()) } else { FollowResult::Err(follow_r.err().unwrap()) };
-            return JobStatus::Processing(Ok(StatusData{
-                status,
-                load_data: LoadResult::Ok(load_data),
-                follow_data,
-            }));
+        status.load_data = LoadResult::Ok(load_data);
+        if task.link.target == LinkTarget::Load || task.link.target == LinkTarget::HeadLoad {
+            return status;
         }
-        return JobStatus::Processing(Ok(StatusData{
-            status,
-            load_data: LoadResult::Ok(load_data),
-            follow_data: FollowResult::None,
-        }));
+
+        let follow_r = self.follow(Arc::clone(&task), get_status, reader).await;
+        if follow_r.is_err() {
+            status.follow_data = FollowResult::Err(follow_r.err().unwrap());
+            return status;
+        }
+        status.follow_data = FollowResult::Ok(follow_r.unwrap());
+        status
     }
 
     pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
@@ -271,12 +290,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
                 let t = Arc::new(task);
                 tokio::select! {
-                    status = self.process_task(Arc::clone(&t), &client, &stats) => {
+                    status_data = self.process_task(Arc::clone(&t), &client, &stats) => {
                         let ctx = self.job.ctx.clone();
 
                         let _ = self.tx.send(JobUpdate {
                             task: Arc::clone(&t),
-                            status,
+                            status: JobStatus::Processing(status_data),
                             context: ctx,
                         }).await;
                     }

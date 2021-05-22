@@ -9,7 +9,7 @@ crusty-core = {path = "../.."}
 tracing-subscriber = "~0.2.17"
 tracing = "~0.1.25"
 anyhow = "~1.0.40"
-tokio = { version = "~1.5.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
+tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
 url = "~2.2.2"
 
 [[bin]]
