@@ -3,7 +3,7 @@ use crate::prelude::*;
 use crate::types as rt;
 
 #[derive(PartialEq)]
-pub enum TaskFilterResult {
+pub enum Result {
     Accept,
     Skip,
     Term,
@@ -16,26 +16,30 @@ pub trait TaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
         ctx: &mut rt::JobContext<JS, TS>,
         task_seq_num: usize,
         task: &mut rt::Task,
-    ) -> TaskFilterResult;
+    ) -> Result;
 }
 
-pub struct SameDomainTaskFilter {
+pub struct SameDomain {
     strip_prefix: String,
 }
 
-pub struct PageBudgetTaskFilter {
+pub struct PageBudget {
     allocated_budget: usize,
     budget: usize,
 }
 
-pub struct LinkPerPageBudgetTaskFilter {
+pub struct LinkPerPageBudget {
     current_task_seq_num: usize,
     links_within_current_task: usize,
     allocated_budget: usize,
 }
 
-pub struct PageLevelTaskFilter {
+pub struct PageLevel {
     max_level: usize,
+}
+
+pub struct MaxRedirect {
+    max_redirect: usize
 }
 
 #[derive(Default)]
@@ -43,13 +47,13 @@ pub struct HashSetDedupTaskFilter {
     visited: std::collections::HashSet<String>,
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for SameDomainTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for SameDomain {
     fn name(&self) -> &'static str {
-        "SameDomainTaskFilter"
+        "SameDomain"
     }
-    fn accept(&mut self, ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if task.link.target == rt::LinkTarget::Load {
-            return TaskFilterResult::Accept;
+            return Result::Accept;
         }
 
         let domain = task.link.url.domain().unwrap_or("_");
@@ -58,13 +62,13 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Sam
         let root_domain = root_url.domain().unwrap_or("");
         if root_domain.strip_prefix(&self.strip_prefix).unwrap_or(root_domain) == domain.strip_prefix(&self.strip_prefix).unwrap_or(domain)
         {
-            return TaskFilterResult::Accept;
+            return Result::Accept;
         }
-        TaskFilterResult::Skip
+        Result::Skip
     }
 }
 
-impl SameDomainTaskFilter {
+impl SameDomain {
     pub fn new(www_allow: bool) -> Self {
         let mut strip_prefix = String::from("");
         if www_allow {
@@ -74,20 +78,20 @@ impl SameDomainTaskFilter {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageBudgetTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageBudget {
     fn name(&self) -> &'static str {
-        "PageBudgetTaskFilter"
+        "PageBudget"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, _: &mut rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, _: &mut rt::Task) -> Result {
         if self.budget >= self.allocated_budget {
-            return TaskFilterResult::Term;
+            return Result::Term;
         }
         self.budget += 1;
-        TaskFilterResult::Accept
+        Result::Accept
     }
 }
 
-impl PageBudgetTaskFilter {
+impl PageBudget {
     pub fn new(allocated_budget: usize) -> Self {
         Self {
             allocated_budget,
@@ -96,23 +100,23 @@ impl PageBudgetTaskFilter {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for LinkPerPageBudgetTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for LinkPerPageBudget {
     fn name(&self) -> &'static str {
-        "LinkPerPageBudgetTaskFilter"
+        "LinkPerPageBudget"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, seq_num: usize, _: &mut rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Result {
         if seq_num > self.current_task_seq_num {
             self.links_within_current_task = 0;
         }
         self.links_within_current_task += 1;
         if self.links_within_current_task > self.allocated_budget {
-            return TaskFilterResult::Term;
+            return Result::Term;
         }
-        TaskFilterResult::Accept
+        Result::Accept
     }
 }
 
-impl LinkPerPageBudgetTaskFilter {
+impl LinkPerPageBudget {
     pub fn new(allocated_budget: usize) -> Self {
         Self {
             allocated_budget,
@@ -122,19 +126,19 @@ impl LinkPerPageBudgetTaskFilter {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageLevelTaskFilter {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageLevel {
     fn name(&self) -> &'static str {
-        "PageLevelTaskFilter"
+        "PageLevel"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if task.level >= self.max_level {
-            return TaskFilterResult::Term;
+            return Result::Term;
         }
-        TaskFilterResult::Accept
+        Result::Accept
     }
 }
 
-impl PageLevelTaskFilter {
+impl PageLevel {
     pub fn new(max_level: usize) -> Self {
         Self { max_level }
     }
@@ -142,15 +146,15 @@ impl PageLevelTaskFilter {
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for HashSetDedupTaskFilter {
     fn name(&self) -> &'static str {
-        "HashSetDedupTaskFilter"
+        "HashSetDedup"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> TaskFilterResult {
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if self.visited.contains(task.link.url.as_str()) {
-            return TaskFilterResult::Skip;
+            return Result::Skip;
         }
 
         self.visited.insert(task.link.url.to_string());
-        TaskFilterResult::Accept
+        Result::Accept
     }
 }
 
@@ -158,6 +162,26 @@ impl HashSetDedupTaskFilter {
     pub fn new() -> Self {
         Self {
             visited: std::collections::HashSet::new(),
+        }
+    }
+}
+
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for MaxRedirect {
+    fn name(&self) -> &'static str {
+        "MaxRedirect"
+    }
+    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+        if task.link.redirect > self.max_redirect {
+            return Result::Term;
+        }
+        Result::Accept
+    }
+}
+
+impl MaxRedirect {
+    pub fn new(max_redirect: usize) -> Self {
+        Self {
+            max_redirect
         }
     }
 }

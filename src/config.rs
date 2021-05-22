@@ -223,7 +223,6 @@ pub struct CrawlerSettings {
     pub internal_read_buffer_size: CBytes,
     pub concurrency: usize,
     pub max_response_size: CBytes,
-    pub max_redirect: usize,
     pub delay: CDuration,
     pub load_timeout: CDuration,
     pub job_soft_timeout: CDuration,
@@ -235,7 +234,7 @@ impl fmt::Display for CrawlerSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "concurrency: {}, delay: {:?}, job hard timeout: {:?}, job soft timeout: {:?}, irbs: {:?}, load timeout: {:?}, max_response_size: {:?}, max_redirect: {:?}, custom headers: {:?}",
+            "concurrency: {}, delay: {:?}, job hard timeout: {:?}, job soft timeout: {:?}, irbs: {:?}, load timeout: {:?}, max_response_size: {:?}, custom headers: {:?}",
             self.concurrency,
             self.delay,
             self.job_hard_timeout,
@@ -243,7 +242,6 @@ impl fmt::Display for CrawlerSettings {
             self.internal_read_buffer_size,
             self.load_timeout,
             self.max_response_size,
-            self.max_redirect,
             self.custom_headers,
         )
     }
@@ -276,7 +274,6 @@ impl Default for CrawlerSettings {
                 .cloned()
                 .collect(),
             max_response_size: CBytes(1024 * 1024 * 2),
-            max_redirect: 5,
         }
     }
 }

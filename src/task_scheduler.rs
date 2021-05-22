@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
-use crate::{types::*, task_filters, task_filters::TaskFilterResult};
+use crate::{types::*, task_filters};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
     job: ResolvedJob<JS, TS>,
@@ -53,33 +53,33 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         }
     }
 
-    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::TaskFilterResult  {
+    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Result {
         let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
         for filter in &mut self.task_filters {
             match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
-                task_filters::TaskFilterResult::Accept => continue,
-                task_filters::TaskFilterResult::Skip => {
+                task_filters::Result::Accept => continue,
+                task_filters::Result::Skip => {
                     if task.is_root() {
                         warn!(action = "skip", filter_name = filter.name(), action);
                     } else {
                         trace!(action = "skip", filter_name = filter.name(), action);
                     }
-                    return task_filters::TaskFilterResult::Skip
+                    return task_filters::Result::Skip
                 },
-                task_filters::TaskFilterResult::Term => {
+                task_filters::Result::Term => {
                     if task.is_root() {
                         warn!(action = "term", filter_name = filter.name(), action);
                     } else {
                         trace!(action = "term", filter_name = filter.name(), action);
                     }
-                    return task_filters::TaskFilterResult::Term
+                    return task_filters::Result::Term
                 },
             }
         }
 
         trace!(action = "scheduled", action);
-        task_filters::TaskFilterResult::Accept
+        task_filters::Result::Accept
     }
 
     async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
@@ -88,14 +88,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 
         if !ignore_links {
             if let JobStatus::Processing(ref r) = task_response.status {
-                let max_redirect = self.job.settings.max_redirect;
-
                 let tasks :Vec<Task> = r.links.iter()
                     .filter_map(|link| {
-                        if link.redirect > max_redirect {
-                            info!(url = link.url.as_str(), "[max redirect]");
-                            return None
-                        }
                         Task::new(link.clone(), &task_response.task).ok()
                     })
                     .into_iter()
@@ -103,11 +97,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                         (self.schedule_filter(&mut task), task)
                     })
                     .take_while(|r|{
-                        r.0 != task_filters::TaskFilterResult::Term
+                        r.0 != task_filters::Result::Term
                     })
                     .filter_map(|v| {
                         let (r, task) = v;
-                        if r == task_filters::TaskFilterResult::Skip {
+                        if r == task_filters::Result::Skip {
                             return None
                         }
                         Some(task)
@@ -132,7 +126,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             );
 
             let mut root_task= self.root_task.clone();
-            if self.schedule_filter(&mut root_task) == TaskFilterResult::Accept {
+            if self.schedule_filter(&mut root_task) == task_filters::Result::Accept {
                 self.schedule(root_task);
             }
 

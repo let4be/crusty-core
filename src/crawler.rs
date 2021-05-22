@@ -21,6 +21,7 @@ use tokio::task::JoinHandle;
 
 #[derive(Clone)]
 pub struct CrawlingRulesOptions {
+    pub max_redirect: usize,
     pub link_target: LinkTarget,
     pub allow_www: bool,
     pub page_budget: Option<usize>,
@@ -33,6 +34,7 @@ pub struct CrawlingRulesOptions {
 impl Default for CrawlingRulesOptions{
     fn default() -> Self {
         Self {
+            max_redirect: 5,
             link_target: LinkTarget::HeadFollow,
             allow_www: true,
             page_budget: Some(50),
@@ -76,17 +78,18 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
     fn task_filters(&self) -> TaskFilters<JS, TS> {
         let options = &self.options;
         let mut task_filters: TaskFilters<JS, TS> = vec![
-            Box::new(task_filters::SameDomainTaskFilter::new(options.allow_www)),
+            Box::new(task_filters::MaxRedirect::new(options.max_redirect)),
+            Box::new(task_filters::SameDomain::new(options.allow_www)),
             Box::new(task_filters::HashSetDedupTaskFilter::new()),
         ];
         if options.page_budget.is_some() {
-            task_filters.push(Box::new(task_filters::PageBudgetTaskFilter::new(options.page_budget.unwrap())));
+            task_filters.push(Box::new(task_filters::PageBudget::new(options.page_budget.unwrap())));
         }
         if options.links_per_page_budget.is_some() {
-            task_filters.push(Box::new(task_filters::LinkPerPageBudgetTaskFilter::new(options.links_per_page_budget.unwrap())))
+            task_filters.push(Box::new(task_filters::LinkPerPageBudget::new(options.links_per_page_budget.unwrap())))
         }
         if options.max_level.is_some() {
-            task_filters.push(Box::new(task_filters::PageLevelTaskFilter::new(options.max_level.unwrap())))
+            task_filters.push(Box::new(task_filters::PageLevel::new(options.max_level.unwrap())))
         }
 
         task_filters
