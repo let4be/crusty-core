@@ -172,7 +172,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for Max
     }
     fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if task.link.redirect > self.max_redirect {
-            return Result::Term;
+            return Result::Skip;
         }
         Result::Accept
     }
