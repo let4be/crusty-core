@@ -77,11 +77,11 @@ pub enum JobError {
 
 #[derive(Clone, PartialEq, Debug )]
 pub enum LinkTarget {
-    Head, // todo: impl
+    Head,
     Load,
-    HeadLoad, // todo: impl
+    HeadLoad,
     Follow,
-    HeadFollow, // todo: impl
+    HeadFollow,
 }
 
 impl fmt::Display for LinkTarget {
