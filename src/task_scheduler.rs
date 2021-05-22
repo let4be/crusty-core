@@ -53,7 +53,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         }
     }
 
-    fn schedule_filter(&mut self, task: &Task) -> task_filters::TaskFilterResult  {
+    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::TaskFilterResult  {
         let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
         for filter in &mut self.task_filters {
@@ -98,8 +98,9 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                         }
                         Task::new(link.clone(), &task_response.task).ok()
                     })
-                    .map(|task| {
-                        (self.schedule_filter(&task), task)
+                    .into_iter()
+                    .map(|mut task| {
+                        (self.schedule_filter(&mut task), task)
                     })
                     .take_while(|r|{
                         r.0 != task_filters::TaskFilterResult::Term
@@ -110,7 +111,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                             return None
                         }
                         Some(task)
-                    }).collect();
+                    })
+                    .collect();
 
                 for task in tasks {
                     self.schedule(task);
@@ -129,8 +131,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                 "Starting..."
             );
 
-            let root_task= self.root_task.clone();
-            if self.schedule_filter(&root_task) == TaskFilterResult::Accept {
+            let mut root_task= self.root_task.clone();
+            if self.schedule_filter(&mut root_task) == TaskFilterResult::Accept {
                 self.schedule(root_task);
             }
 
