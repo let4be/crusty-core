@@ -113,7 +113,6 @@ pub struct Status {
     pub status_code: i32,
     pub headers: http::HeaderMap<http::HeaderValue>,
     pub status_metrics: StatusMetrics,
-    pub links: Vec<Link>,
 }
 
 #[derive(Clone, Default)]
@@ -154,19 +153,18 @@ pub enum LoadResult {
 
 pub struct LoadData {
     pub metrics: LoadMetrics,
-    pub links: Vec<Link>
 }
 
 pub struct StatusData {
     pub head_status: StatusResult,
     pub status: StatusResult,
     pub load_data: LoadResult,
-    pub follow_data: FollowResult
+    pub follow_data: FollowResult,
+    pub links: Vec<Link>
 }
 
 pub struct FollowData {
     pub metrics: FollowMetrics,
-    pub links: Vec<Link>
 }
 
 pub struct JobData {
@@ -192,13 +190,13 @@ pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
 }
 
 pub struct ParserTask {
-    pub payload: Box<dyn FnOnce() -> Result<FollowData> + Send + 'static>,
+    pub payload: Box<dyn FnOnce() -> Result<(FollowData, Vec<Link>)> + Send + 'static>,
     pub time: Instant,
     pub res_tx: Sender<ParserResponse>
 }
 
 pub struct ParserResponse {
-    pub res: Result<FollowData>,
+    pub res: Result<(FollowData, Vec<Link>)>,
     pub wait_time: Duration,
     pub work_time: Duration
 }
@@ -249,34 +247,6 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobContext<JS, TS> {
 
     pub fn consume_links(&mut self) -> Vec<Link> {
         self.links.drain(0..).collect()
-    }
-}
-
-static EMPTY_LINKS: Vec<Link> = vec![];
-
-impl StatusData {
-    pub fn collect_links(&self) -> LinkIter {
-        let head_status_links_it = if let StatusResult::Ok(status_data) = &self.head_status {
-            status_data.links.iter()
-        } else {
-            EMPTY_LINKS.iter()
-        };
-        let status_links_it = if let StatusResult::Ok(status_data) = &self.status {
-            status_data.links.iter()
-        } else {
-            EMPTY_LINKS.iter()
-        };
-        let load_links_it = if let LoadResult::Ok(load_data) = &self.load_data {
-            load_data.links.iter()
-        } else {
-            EMPTY_LINKS.iter()
-        };
-        let follow_links_it = if let FollowResult::Ok(follow_data) = &self.follow_data {
-            follow_data.links.iter()
-        } else {
-            EMPTY_LINKS.iter()
-        };
-        Box::new(head_status_links_it.chain(status_links_it).chain(load_links_it).chain(follow_links_it))
     }
 }
 

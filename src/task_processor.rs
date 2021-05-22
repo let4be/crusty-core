@@ -96,12 +96,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         status_metrics.status_time = t.elapsed();
         let rs = resp.status();
 
-        let mut status = Status {
+        let status = Status {
             started_processing_on: t,
             status_code: rs.as_u16() as i32,
             headers: resp.headers().clone(),
             status_metrics,
-            links: vec![]
         };
 
         let mut term_by = None;
@@ -120,7 +119,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             return Err(Error::FilterTerm {name: term_by.unwrap().into()})
         }
 
-        status.links = self.job.ctx.consume_links();
         Ok((status, resp))
     }
 
@@ -174,13 +172,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
         let load_data = LoadData{
             metrics: load_metrics,
-            links: self.job.ctx.consume_links()
         };
         Ok((load_data, reader))
     }
 
     async fn follow(
-        &self,
+        &mut self,
         task: Arc<Task>,
         status: Status,
         reader: Box<dyn std::io::Read + Sync + Send>,
@@ -192,7 +189,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             let task_expanders = Arc::clone(&self.task_expanders);
             let mut job_ctx = self.job.ctx.clone();
 
-            move || -> Result<FollowData> {
+            move || -> Result<(FollowData, Vec<Link>)> {
                 let t = Instant::now();
 
                 let document = select::document::Document::from_read(reader).context("cannot read html document")?;
@@ -201,12 +198,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
                     h.expand(&mut job_ctx, &task, &status, &document);
                 }
 
-                Ok(FollowData{
+                Ok((FollowData{
                     metrics: FollowMetrics{
                         parse_time: t.elapsed(),
                     },
-                    links: job_ctx.consume_links()
-                })
+                }, job_ctx.consume_links()))
             }
         };
 
@@ -217,7 +213,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         }).await;
 
         let parser_response = parse_res_rx.recv().await.context("cannot follow html document")?;
-        parser_response.res
+        let (follow_data, links) = parser_response.res?;
+        self.job.ctx.push_links(links);
+        Ok(follow_data)
     }
 
 
@@ -226,7 +224,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             head_status: StatusResult::None,
             status: StatusResult::None,
             load_data: LoadResult::None,
-            follow_data: FollowResult::None
+            follow_data: FollowResult::None,
+            links: vec![],
         };
         if task.link.target == LinkTarget::Head ||
             task.link.target == LinkTarget::HeadLoad ||
@@ -271,7 +270,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             status.follow_data = FollowResult::Err(follow_r.err().unwrap());
             return status;
         }
-        status.follow_data = FollowResult::Ok(follow_r.unwrap());
+        let follow_data = follow_r.unwrap();
+        status.follow_data = FollowResult::Ok(follow_data);
         status
     }
 
@@ -290,8 +290,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
                 let t = Arc::new(task);
                 tokio::select! {
-                    status_data = self.process_task(Arc::clone(&t), &client, &stats) => {
+                    mut status_data = self.process_task(Arc::clone(&t), &client, &stats) => {
                         let ctx = self.job.ctx.clone();
+                        status_data.links.extend(self.job.ctx.consume_links());
 
                         let _ = self.tx.send(JobUpdate {
                             task: Arc::clone(&t),

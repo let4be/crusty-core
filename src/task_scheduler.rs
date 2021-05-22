@@ -90,7 +90,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             if let JobStatus::Processing(ref r) = task_response.status {
                 let max_redirect = self.job.settings.max_redirect;
 
-                let tasks :Vec<Task> = r.collect_links()
+                let tasks :Vec<Task> = r.links.iter()
                     .filter_map(|link| {
                         if link.redirect > max_redirect {
                             info!(url = link.url.as_str(), "[max redirect]");
