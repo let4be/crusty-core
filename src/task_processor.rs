@@ -18,7 +18,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: Like
     task_expanders: Arc<TaskExpanders<JS, TS>>,
 
     tx: Sender<JobUpdate<JS, TS>>,
-    tasks_rx: Receiver<Task>,
+    tasks_rx: Receiver<Arc<Task>>,
     parse_tx: Sender<ParserTask>,
     client_factory: ClientFactory<C>,
 }
@@ -28,7 +28,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     pub(crate) fn new(
         job: ResolvedJob<JS, TS>,
         tx: Sender<JobUpdate<JS, TS>>,
-        tasks_rx: Receiver<Task>,
+        tasks_rx: Receiver<Arc<Task>>,
         parse_tx: Sender<ParserTask>,
         client_factory: ClientFactory<C>,
     ) -> TaskProcessor<JS, TS, C> {
@@ -288,14 +288,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
                 stats.reset();
 
-                let t = Arc::new(task);
                 tokio::select! {
-                    mut status_data = self.process_task(Arc::clone(&t), &client, &stats) => {
+                    mut status_data = self.process_task(Arc::clone(&task), &client, &stats) => {
                         let ctx = self.job.ctx.clone();
                         status_data.links.extend(self.job.ctx.consume_links());
 
                         let _ = self.tx.send(JobUpdate {
-                            task: Arc::clone(&t),
+                            task,
                             status: JobStatus::Processing(status_data),
                             context: ctx,
                         }).await;

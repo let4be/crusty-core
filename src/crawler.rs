@@ -207,10 +207,10 @@ impl<R: Resolver> Crawler<R> {
         TracingTask::new(span!(Level::INFO, url=job.url.as_str()), async move {
             let job = ResolvedJob::from(job);
 
-            let mut scheduler = TaskScheduler::new(
+            let scheduler = TaskScheduler::new(
                 job.clone(),
                 update_tx.clone()
-            )?;
+            );
 
             let client_factory = HttpClientFactory {
                 networking_profile: self.networking_profile.clone(),
@@ -232,8 +232,7 @@ impl<R: Resolver> Crawler<R> {
                 }));
             }
 
-            let job_finishing_update = scheduler.go().await?;
-            drop(scheduler);
+            let job_finishing_update = scheduler.go()?.await?;
 
             trace!("Waiting for workers to finish...");
             for h in processor_handles {
