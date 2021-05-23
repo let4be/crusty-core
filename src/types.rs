@@ -160,7 +160,7 @@ pub struct StatusData {
     pub status: StatusResult,
     pub load_data: LoadResult,
     pub follow_data: FollowResult,
-    pub links: Vec<Link>
+    pub links: Vec<Arc<Link>>
 }
 
 pub struct FollowData {
@@ -179,7 +179,7 @@ pub enum JobStatus {
 #[derive(Clone)]
 pub struct Task {
     pub queued_at: Instant,
-    pub link: Link,
+    pub link: Arc<Link>,
     pub level: usize,
 }
 
@@ -190,13 +190,13 @@ pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
 }
 
 pub struct ParserTask {
-    pub payload: Box<dyn FnOnce() -> Result<(FollowData, Vec<Link>)> + Send + 'static>,
+    pub payload: Box<dyn FnOnce() -> Result<(FollowData, Vec<Arc<Link>>)> + Send + 'static>,
     pub time: Instant,
     pub res_tx: Sender<ParserResponse>
 }
 
 pub struct ParserResponse {
-    pub res: Result<(FollowData, Vec<Link>)>,
+    pub res: Result<(FollowData, Vec<Arc<Link>>)>,
     pub wait_time: Duration,
     pub work_time: Duration
 }
@@ -216,7 +216,7 @@ pub struct JobContext<JS, TS> {
     pub root_url : Url,
     pub job_state: Arc<Mutex<JS>>,
     pub task_state: Arc<Mutex<TS>>,
-    links: Vec<Link>
+    links: Vec<Arc<Link>>
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobContext<JS, TS> {
@@ -242,10 +242,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobContext<JS, TS> {
     }
 
     pub fn push_links(&mut self, links: Vec<Link>) {
+        self.links.extend(links.into_iter().map(|link|Arc::new(link)))
+    }
+
+    pub(crate) fn push_arced_links(&mut self, links: Vec<Arc<Link>>) {
         self.links.extend(links)
     }
 
-    pub fn consume_links(&mut self) -> Vec<Link> {
+    pub fn consume_links(&mut self) -> Vec<Arc<Link>> {
         self.links.drain(0..).collect()
     }
 }
@@ -280,7 +284,7 @@ impl Link {
 
 impl Task {
     pub(crate) fn new_root(url: &Url) -> Result<Task> {
-        let link = Link::new_abs(url.clone(), "".into(), "".into(), 0, LinkTarget::Follow);
+        let link = Arc::new(Link::new_abs(url.clone(), "".into(), "".into(), 0, LinkTarget::Follow));
 
         Ok(Task {
             queued_at: Instant::now(),
@@ -289,7 +293,7 @@ impl Task {
         })
     }
 
-    pub(crate) fn new(link: Link, parent: &Task) -> Result<Task> {
+    pub(crate) fn new(link: Arc<Link>, parent: &Task) -> Result<Task> {
         let scheme = link.url.scheme();
         if scheme != "http" && scheme != "https" {
             return Err(anyhow!("invalid scheme {:#?} in {:#?}", scheme, link.url.as_str()).into());

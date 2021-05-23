@@ -78,16 +78,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         task_filters::Result::Accept
     }
 
-    async fn process_task_response(&mut self, mut task_response: JobUpdate<JS, TS>, ignore_links: bool) {
+    async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
         self.pages_pending -= 1;
         self.task_seq_num += 1;
 
-        if let (JobStatus::Processing(ref mut r), false) = (&mut task_response.status, ignore_links) {
-            let mut links : Vec<Link> = vec![];
-            std::mem::swap(&mut links, &mut r.links);
-            let tasks :Vec<_> = links.into_iter()
+        if let (JobStatus::Processing(ref r), false) = (&task_response.status, ignore_links) {
+            let tasks :Vec<_> = r.links.iter()
                 .filter_map(|link| {
-                    Task::new(link, &task_response.task).ok()
+                    Task::new(Arc::clone(link), &task_response.task).ok()
                 })
                 .map(|mut task| {
                     (self.schedule_filter(&mut task), task)

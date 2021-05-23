@@ -189,7 +189,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             let task_expanders = Arc::clone(&self.task_expanders);
             let mut job_ctx = self.job.ctx.clone();
 
-            move || -> Result<(FollowData, Vec<Link>)> {
+            move || -> Result<(FollowData, Vec<Arc<Link>>)> {
                 let t = Instant::now();
 
                 let document = select::document::Document::from_read(reader).context("cannot read html document")?;
@@ -214,7 +214,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
         let parser_response = parse_res_rx.recv().await.context("cannot follow html document")?;
         let (follow_data, links) = parser_response.res?;
-        self.job.ctx.push_links(links);
+        self.job.ctx.push_arced_links(links);
         Ok(follow_data)
     }
 
