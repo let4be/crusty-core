@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     task_expanders::TaskExpander,
     types::{
-        LinkTarget, Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
+        LinkTarget, Job, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
         select::predicate::Name, select::document::Document,
         async_channel::unbounded,
         async_channel::Receiver
@@ -35,7 +35,7 @@ impl fmt::Display for JobState {
     }
 }
 
-impl JobStateValues for JobState {
+impl JobState {
     fn finalize(&mut self) {
         self.duplicate_titles = self.duplicate_titles.iter().filter_map(|(k, v)|{
             if v.len() < 2 { None } else { Some((k.clone(), v.clone())) }
@@ -79,7 +79,9 @@ async fn process_responses(rx: Receiver<JobUpdate<JobState, TaskState>>) {
     while let Ok(r) = rx.recv().await {
         info!("- {}, task context: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
-            info!("final context: {}", r.context.job_state.lock().unwrap());
+            let mut ctx = r.context.job_state.lock().unwrap();
+            ctx.finalize();
+            info!("final context: {}", ctx);
         }
     }
 }
@@ -106,13 +108,12 @@ async fn main() -> Result<()> {
 
     let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let rules = Box::new(CrawlingRules {
-        options: CrawlingRulesOptions{
-            page_budget: Some(100),
-            link_target: LinkTarget::Follow,
-            ..CrawlingRulesOptions::default()
-        },
-        ..CrawlingRules::default()}
+    let rules_options = CrawlingRulesOptions{
+        page_budget: Some(100),
+        link_target: LinkTarget::Follow,
+        ..CrawlingRulesOptions::default()
+    };
+    let rules = Box::new(CrawlingRules::new(rules_options)
         .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
 
     let crawler = Crawler::new(networking_profile);

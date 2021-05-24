@@ -202,8 +202,9 @@ pub struct ParserResponse {
 }
 
 pub trait JobStateValues: Send + Sync + Clone + 'static {
-    fn finalize(&mut self){}
 }
+
+impl<T: Send + Sync + Clone + 'static> JobStateValues for T {}
 
 pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {
 }
@@ -216,7 +217,7 @@ pub struct JobContext<JS, TS> {
     pub root_url : Url,
     pub job_state: Arc<Mutex<JS>>,
     pub task_state: Arc<Mutex<TS>>,
-    links: Vec<Arc<Link>>
+    links: Vec<Arc<Link>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobContext<JS, TS> {

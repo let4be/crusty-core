@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     task_expanders::TaskExpander,
     types::{
-        Job, JobStateValues, JobContext, Task, Status as HttpStatus, JobStatus,
+        Job, JobContext, Task, Status as HttpStatus, JobStatus,
         select::predicate::Name, select::document::Document
     },
     config,
@@ -18,7 +18,6 @@ use url::Url;
 pub struct JobState {
     sum_title_len: usize
 }
-impl JobStateValues for JobState {}
 
 #[derive(Debug, Clone, Default)]
 pub struct TaskState {
@@ -48,9 +47,8 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let rules = Box::new(CrawlingRules {
-        options: CrawlingRulesOptions::default(),
-        ..CrawlingRules::default()}
+    let rules_options = CrawlingRulesOptions::default();
+    let rules = Box::new(CrawlingRules::new(rules_options)
         .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
 
     let crawler = Crawler::new(networking_profile);

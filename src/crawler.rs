@@ -46,7 +46,6 @@ impl Default for CrawlingRulesOptions{
     }
 }
 
-#[derive(Default)]
 pub struct CrawlingRules<JS, TS> {
     pub options: CrawlingRulesOptions,
     pub custom_task_filters: Option<Box<dyn Fn() -> TaskFilters<JS, TS> + Send + Sync>>,
@@ -56,6 +55,15 @@ pub struct CrawlingRules<JS, TS> {
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> CrawlingRules<JS, TS> {
+    pub fn new(opts: CrawlingRulesOptions) -> Self {
+        Self {
+            options: opts,
+            custom_task_filters: None,
+            custom_task_expanders: None,
+            custom_status_filters: None,
+            custom_load_filters: None,
+        }
+    }
     pub fn with_task_filters<T: Fn() -> TaskFilters<JS, TS> + Send + Sync + 'static>(mut self, f: T) -> Self {
         self.custom_task_filters = Some(Box::new(f));
         self

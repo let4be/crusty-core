@@ -154,15 +154,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             } else {
                 None
             };
-            let ctx = self.job.ctx;
-            {
-                let mut job_state = ctx.job_state.lock().unwrap();
-                job_state.finalize();
-            }
             Ok(JobUpdate {
                 task: root_task,
                 status: JobStatus::Finished(JobData { err }),
-                context: ctx,
+                context: self.job.ctx,
             })
         }).instrument())
     }
