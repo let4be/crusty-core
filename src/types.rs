@@ -25,12 +25,12 @@ pub type BoxedTaskExpander<JS, TS> = Box<dyn Fn() -> Box<dyn task_expanders::Exp
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
     pub url: url::Url,
-    pub settings: config::CrawlerSettings,
+    pub settings: config::CrawlingSettings,
     pub rules: Box<dyn JobRules<JS, TS>>,
     pub job_state: JS
 }
 impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
-    pub fn new<R: JobRules<JS, TS>>(url: &str, settings: config::CrawlerSettings, rules: R, job_state: JS) -> anyhow::Result<Job<JS, TS>> {
+    pub fn new<R: JobRules<JS, TS>>(url: &str, settings: config::CrawlingSettings, rules: R, job_state: JS) -> anyhow::Result<Job<JS, TS>> {
         let url = Url::parse(url).context("cannot parse url")?;
 
         Ok(Self {
@@ -42,7 +42,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
 #[derive(Clone)]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
     pub url: url::Url,
-    pub settings: config::CrawlerSettings,
+    pub settings: config::CrawlingSettings,
     pub rules: Arc<Box<dyn JobRules<JS, TS>>>,
     pub ctx: JobCtx<JS, TS>
 }

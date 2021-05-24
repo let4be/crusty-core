@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, &pp);
 
-    let settings = config::CrawlerSettings::default();
+    let settings = config::CrawlingSettings::default();
     let rules_options = CrawlingRulesOptions{
         page_budget: Some(100),
         link_target: LinkTarget::Follow,

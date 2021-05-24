@@ -219,7 +219,7 @@ impl ConcurrencyProfile {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct CrawlerSettings {
+pub struct CrawlingSettings {
     pub internal_read_buffer_size: CBytes,
     pub concurrency: usize,
     pub max_response_size: CBytes,
@@ -230,7 +230,7 @@ pub struct CrawlerSettings {
     pub custom_headers: HashMap<String, Vec<String>>,
 }
 
-impl fmt::Display for CrawlerSettings {
+impl fmt::Display for CrawlingSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -247,7 +247,7 @@ impl fmt::Display for CrawlerSettings {
     }
 }
 
-impl Default for CrawlerSettings {
+impl Default for CrawlingSettings {
     fn default() -> Self {
         Self {
             concurrency: 2,

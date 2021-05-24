@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, &pp);
 
-    let settings = config::CrawlerSettings::default();
+    let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
     let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
 
