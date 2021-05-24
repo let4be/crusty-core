@@ -9,6 +9,7 @@ use crate::{
     task_filters,
     hyper_utils,
     status_filters,
+    load_filters,
     task_expanders,
     resolver::AsyncHyperResolverAdaptor,
     resolver::Resolver
@@ -47,36 +48,58 @@ impl Default for CrawlingRulesOptions{
 
 pub struct CrawlingRules<JS, TS> {
     pub options: CrawlingRulesOptions,
-    pub custom_task_filters: Option<Box<dyn Fn() -> TaskFilters<JS, TS> + Send + Sync>>,
-    pub custom_status_filters: Option<Box<dyn Fn() -> StatusFilters<JS, TS> + Send + Sync>>,
-    pub custom_load_filters: Option<Box<dyn Fn() -> LoadFilters<JS, TS> + Send + Sync>>,
-    pub custom_task_expanders: Option<Box<dyn Fn() -> TaskExpanders<JS, TS> + Send + Sync>>
+
+    pub custom_status_filters: Vec<BoxedStatusFilter<JS, TS>>,
+    pub custom_load_filter: Vec<BoxedLoadFilter<JS, TS>>,
+    pub custom_task_filter: Vec<BoxedTaskFilter<JS, TS>>,
+    pub custom_task_expanders: Vec<BoxedTaskExpander<JS, TS>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> CrawlingRules<JS, TS> {
     pub fn new(opts: CrawlingRulesOptions) -> Self {
         Self {
             options: opts,
-            custom_task_filters: None,
-            custom_task_expanders: None,
-            custom_status_filters: None,
-            custom_load_filters: None,
+
+            custom_status_filters: vec![],
+            custom_load_filter: vec![],
+            custom_task_filter: vec![],
+            custom_task_expanders: vec![],
         }
     }
-    pub fn with_task_filters<T: Fn() -> TaskFilters<JS, TS> + Send + Sync + 'static>(mut self, f: T) -> Self {
-        self.custom_task_filters = Some(Box::new(f));
+
+    pub fn with_status_filter<H: status_filters::Filter<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+        self.custom_status_filters.push(
+            Box::new(move ||
+                Box::new(f())
+            )
+        );
         self
     }
-    pub fn with_status_filters<T: Fn() -> StatusFilters<JS, TS> + Send + Sync + 'static>(mut self, f: T) -> Self {
-        self.custom_status_filters = Some(Box::new(f));
+
+    pub fn with_load_filter<H: load_filters::Filter<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+        self.custom_load_filter.push(
+            Box::new(move ||
+                Box::new(f())
+            )
+        );
         self
     }
-    pub fn with_load_filters<T: Fn() -> LoadFilters<JS, TS> + Send + Sync + 'static>(mut self, f: T) -> Self {
-        self.custom_load_filters = Some(Box::new(f));
+
+    pub fn with_task_filter<H: task_filters::Filter<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+        self.custom_task_filter.push(
+            Box::new(move ||
+                Box::new(f())
+            )
+        );
         self
     }
-    pub fn with_task_expanders<T: Fn() -> TaskExpanders<JS, TS> + Send + Sync + 'static>(mut self, f: T) -> Self {
-        self.custom_task_expanders = Some(Box::new(f));
+
+    pub fn with_task_expander<H: task_expanders::Expander<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+        self.custom_task_expanders.push(
+            Box::new(move ||
+                Box::new(f())
+            )
+        );
         self
     }
 }
@@ -99,6 +122,9 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
             task_filters.push(Box::new(task_filters::PageLevel::new(options.max_level.unwrap())))
         }
 
+        for e in &self.custom_task_filter {
+            task_filters.push(e());
+        }
         task_filters
     }
 
@@ -112,24 +138,30 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
         if options.redirect_term_on_err.is_some() {
             status_filters.push(Box::new(status_filters::Redirect::new(true)));
         }
+
+        for e in &self.custom_status_filters {
+            status_filters.push(e());
+        }
         status_filters
     }
 
     fn load_filters(&self) -> LoadFilters<JS, TS> {
-        vec![]
+        let mut load_filters = vec![];
+
+        for e in &self.custom_load_filter {
+            load_filters.push(e());
+        }
+        load_filters
     }
 
     fn task_expanders(&self) -> TaskExpanders<JS, TS> {
         let mut task_expanders : TaskExpanders<JS, TS> = vec![
             Box::new(task_expanders::FollowLinks::new(self.options.link_target.clone())),
         ];
-        if self.custom_task_expanders.is_some() {
-            let custom_task_expanders = self.custom_task_expanders.as_ref().unwrap();
-            for e in custom_task_expanders() {
-                task_expanders.push(e);
-            }
-        }
 
+        for e in &self.custom_task_expanders {
+            task_expanders.push(e());
+        }
         task_expanders
     }
 }
@@ -171,6 +203,7 @@ impl<R: Resolver> HttpClientFactory<R> {
 
 pub struct Crawler<R: Resolver>{
     networking_profile: config::ResolvedNetworkingProfile<R>,
+    parse_tx: Sender<ParserTask>,
 }
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues>{
@@ -187,18 +220,22 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
 }
 
 impl<R: Resolver> Crawler<R> {
-    pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>) -> Crawler<R> {
+    pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, pp: &ParserProcessorHandle) -> Crawler<R> {
+        Self::_new(networking_profile, pp.tx.clone())
+    }
+
+    pub fn _new(networking_profile: config::ResolvedNetworkingProfile<R>, parse_tx: Sender<ParserTask>) -> Crawler<R> {
         Crawler {
             networking_profile,
+            parse_tx,
         }
     }
 
-    pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>, pp: &ParserProcessorHandle) -> CrawlerIter<JS, TS> {
+    pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>) -> CrawlerIter<JS, TS> {
         let (tx, rx) = async_channel::unbounded();
 
-        let parse_tx = pp.tx.clone();
         let h = tokio::spawn(async move {
-            self._go(job, parse_tx,tx).await?;
+            self.go(job,tx).await?;
             Ok::<_, Error>(())
         });
 
@@ -208,17 +245,6 @@ impl<R: Resolver> Crawler<R> {
     pub fn go<JS: JobStateValues, TS: TaskStateValues>(
         &self,
         job: Job<JS, TS>,
-        pp: &ParserProcessorHandle,
-        update_tx: Sender<JobUpdate<JS, TS>>,
-    ) -> PinnedTask
-    {
-        self._go(job, pp.tx.clone(), update_tx)
-    }
-
-    fn _go<JS: JobStateValues, TS: TaskStateValues>(
-        &self,
-        job: Job<JS, TS>,
-        parse_tx: Sender<ParserTask>,
         update_tx: Sender<JobUpdate<JS, TS>>,
     ) -> PinnedTask
     {
@@ -241,7 +267,7 @@ impl<R: Resolver> Crawler<R> {
                     job.clone(),
                     scheduler.job_update_tx.clone(),
                     scheduler.tasks_rx.clone(),
-                    parse_tx.clone(),
+                    self.parse_tx.clone(),
                     Box::new(move || cf.make())
                 );
 
@@ -290,8 +316,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
 
     async fn process(self) -> Result<()> {
         while let Ok(job) = self.job_rx.recv().await {
-            let crawler = Crawler::new( self.networking_profile.clone());
-            let _ = crawler._go(job, self.parse_tx.clone(), self.update_tx.clone()).await;
+            let crawler = Crawler::_new( self.networking_profile.clone(), self.parse_tx.clone());
+            let _ = crawler.go(job, self.update_tx.clone()).await;
         }
         Ok(())
     }

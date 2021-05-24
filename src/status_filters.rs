@@ -7,7 +7,7 @@ pub enum Action {
     Term,
 }
 
-pub trait StatusFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,
@@ -22,7 +22,7 @@ pub struct ContentType {
     term_on_error: bool
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for ContentType {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for ContentType {
     fn name(&self) -> &'static str { "ContentTypeFilter" }
     fn accept(
         &self,
@@ -66,7 +66,7 @@ pub struct Redirect {
     term_on_error: bool
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> StatusFilter<JS, TS> for Redirect {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirect {
     fn name(&self) -> &'static str { "RedirectLoadFilter" }
     fn accept(
         &self,

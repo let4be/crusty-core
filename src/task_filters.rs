@@ -9,7 +9,7 @@ pub enum Result {
     Term,
 }
 
-pub trait TaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &mut self,
@@ -47,7 +47,7 @@ pub struct HashSetDedup {
     visited: std::collections::HashSet<String>,
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for SameDomain {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
     fn name(&self) -> &'static str {
         "SameDomain"
     }
@@ -78,7 +78,7 @@ impl SameDomain {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for TotalPageBudget {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for TotalPageBudget {
     fn name(&self) -> &'static str {
         "PageBudget"
     }
@@ -100,7 +100,7 @@ impl TotalPageBudget {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for LinkPerPageBudget {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPerPageBudget {
     fn name(&self) -> &'static str {
         "LinkPerPageBudget"
     }
@@ -126,7 +126,7 @@ impl LinkPerPageBudget {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for PageLevel {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for PageLevel {
     fn name(&self) -> &'static str {
         "PageLevel"
     }
@@ -144,7 +144,7 @@ impl PageLevel {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for HashSetDedup {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSetDedup {
     fn name(&self) -> &'static str {
         "HashSetDedup"
     }
@@ -166,7 +166,7 @@ impl HashSetDedup {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskFilter<JS, TS> for MaxRedirect {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for MaxRedirect {
     fn name(&self) -> &'static str {
         "MaxRedirect"
     }

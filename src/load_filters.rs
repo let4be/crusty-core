@@ -7,7 +7,7 @@ pub enum LoadFilterAction {
     Term,
 }
 
-pub trait LoadFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,

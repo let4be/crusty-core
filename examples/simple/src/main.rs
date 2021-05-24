@@ -1,5 +1,5 @@
 use crusty_core::{
-    ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, task_expanders::TaskExpander,
+    ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, task_expanders::Expander,
     types::{
         Job, JobContext as JobCtx, Task, Status as HttpStatus, JobStatus,
         select::predicate::Name, select::document::Document
@@ -19,7 +19,7 @@ pub struct TaskState {
 }
 
 pub struct DataExtractor {}
-impl TaskExpander<JobState, TaskState> for DataExtractor {
+impl Expander<JobState, TaskState> for DataExtractor {
     fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) {
         let title = doc.find(Name("title")).next().map(|v|v.text());
         if let Some(title) = title {
@@ -34,16 +34,16 @@ async fn main() -> anyhow::Result<()> {
     let concurrency_profile = config::ConcurrencyProfile::default();
     let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
-    let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let rules_options = CrawlingRulesOptions::default();
-    let rules = Box::new(CrawlingRules::new(rules_options)
-        .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
+    let crawler = Crawler::new(networking_profile, &pp);
+
+    let settings = config::CrawlerSettings::default();
+    let rules_opt = CrawlingRulesOptions::default();
+    let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
 
     let url = url::Url::parse("https://bash.im").context("cannot parse url")?;
-    let job = Job{url, settings, rules, job_state: JobState::default()};
-    let crawler = Crawler::new(networking_profile);
-    for r in crawler.iter(job, &pp) {
+    let job = Job::new(url, settings, rules, JobState::default());
+    for r in crawler.iter(job) {
         println!("- {}, task state: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
             println!("final job state: {:?}", r.context.job_state.lock().unwrap());

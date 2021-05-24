@@ -2,7 +2,7 @@
 use crate::prelude::*;
 use crate::types as rt;
 
-pub trait TaskExpander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn expand(
         &self,
         ctx: &mut rt::JobContext<JS, TS>,
@@ -16,7 +16,7 @@ pub struct FollowLinks {
     link_target: rt::LinkTarget
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for FollowLinks {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for FollowLinks {
     fn expand(
         &self,
         ctx: &mut rt::JobContext<JS, TS>,
@@ -49,7 +49,7 @@ pub struct LoadImages {
     link_target: rt::LinkTarget
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> TaskExpander<JS, TS> for LoadImages {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for LoadImages {
     fn expand(
         &self,
         ctx: &mut rt::JobContext<JS, TS>,

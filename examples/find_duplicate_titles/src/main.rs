@@ -3,7 +3,7 @@ use crusty_core::{
     CrawlingRules,
     CrawlingRulesOptions,
     Crawler,
-    task_expanders::TaskExpander,
+    task_expanders::Expander,
     types::{
         LinkTarget, Job, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
         select::predicate::Name, select::document::Document,
@@ -49,14 +49,9 @@ pub struct TaskState {
 }
 
 pub struct DataExtractor {}
-impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self,
-              ctx: &mut JobContext<JobState, TaskState>,
-              task: &Task,
-              _status: &HttpStatus,
-              document: &Document)
-    {
-        let title = document
+impl Expander<JobState, TaskState> for DataExtractor {
+    fn expand(&self, ctx: &mut JobContext<JobState, TaskState>, task: &Task, _: &HttpStatus, doc: &Document) {
+        let title = doc
             .find(Name("title")).next().map(|v|v.text());
         if let Some(title) = title {
             ctx.task_state.lock().unwrap().title = title.clone();
@@ -104,25 +99,25 @@ async fn main() -> Result<()> {
     };
     let pp = ParserProcessor::spawn( concurrency_profile, 1024 * 1024 * 32);
 
-    let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
+    let crawler = Crawler::new(networking_profile, &pp);
+
+    let settings = config::CrawlerSettings::default();
     let rules_options = CrawlingRulesOptions{
         page_budget: Some(100),
         link_target: LinkTarget::Follow,
         ..CrawlingRulesOptions::default()
     };
-    let rules = Box::new(CrawlingRules::new(rules_options)
-        .with_task_expanders(|| vec![Box::new(DataExtractor{})] ));
-
-    let crawler = Crawler::new(networking_profile);
+    let rules = CrawlingRules::new(rules_options)
+        .with_task_expander(||DataExtractor{});
 
     let (update_tx, update_rx) = unbounded();
 
     let h_sub = tokio::spawn(process_responses(update_rx));
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    let job = Job{url, settings, rules, job_state: JobState::default()};
-    crawler.go(job, &pp, update_tx).await?;
+    let job = Job::new(url, settings, rules, JobState::default());
+    crawler.go(job, update_tx).await?;
 
     let _ = pp.join().await?;
     let _ = h_sub.await?;

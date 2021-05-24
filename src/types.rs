@@ -13,16 +13,28 @@ use crate::{
 use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
 
-pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::TaskFilter<JS, TS> + Send + Sync>>;
-pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::StatusFilter<JS, TS> + Send + Sync>>;
-pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::LoadFilter<JS, TS> + Send + Sync>>;
-pub type TaskExpanders<JS, TS> = Vec<Box<dyn task_expanders::TaskExpander<JS, TS> + Send + Sync>>;
+pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::Filter<JS, TS> + Send + Sync>>;
+pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::Filter<JS, TS> + Send + Sync>>;
+pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::Filter<JS, TS> + Send + Sync>>;
+pub type TaskExpanders<JS, TS> = Vec<Box<dyn task_expanders::Expander<JS, TS> + Send + Sync>>;
+
+pub type BoxedTaskFilter<JS, TS> = Box<dyn Fn() -> Box<dyn task_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
+pub type BoxedStatusFilter<JS, TS> = Box<dyn Fn() -> Box<dyn status_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
+pub type BoxedLoadFilter<JS, TS> = Box<dyn Fn() -> Box<dyn load_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
+pub type BoxedTaskExpander<JS, TS> = Box<dyn Fn() -> Box<dyn task_expanders::Expander<JS, TS> + Send + Sync> + Send + Sync>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
     pub url: url::Url,
     pub settings: config::CrawlerSettings,
     pub rules: Box<dyn JobRules<JS, TS>>,
     pub job_state: JS
+}
+impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
+    pub fn new<R: JobRules<JS, TS>>(url: url::Url, settings: config::CrawlerSettings, rules: R, job_state: JS) -> Job<JS, TS>{
+        Self {
+            url, settings, rules: Box::new(rules), job_state
+        }
+    }
 }
 
 #[derive(Clone)]
