@@ -2,6 +2,7 @@
 use crate::internal_prelude::*;
 use crate::{
     types::*,
+    parser_processor::ParserProcessor,
     parser_processor::ParserProcessorHandle,
     task_scheduler::*,
     task_processor::*,
@@ -12,6 +13,7 @@ use crate::{
     load_filters,
     task_expanders,
     resolver::AsyncHyperResolverAdaptor,
+    resolver::AsyncHyperResolver,
     resolver::Resolver
 };
 
@@ -53,6 +55,12 @@ pub struct CrawlingRules<JS, TS> {
     pub custom_load_filter: Vec<BoxedLoadFilter<JS, TS>>,
     pub custom_task_filter: Vec<BoxedTaskFilter<JS, TS>>,
     pub custom_task_expanders: Vec<BoxedTaskExpander<JS, TS>>,
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> Default for CrawlingRules<JS, TS>{
+    fn default() -> Self {
+        Self::new(CrawlingRulesOptions::default())
+    }
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> CrawlingRules<JS, TS> {
@@ -201,7 +209,7 @@ impl<R: Resolver> HttpClientFactory<R> {
     }
 }
 
-pub struct Crawler<R: Resolver>{
+pub struct Crawler<R: Resolver = AsyncHyperResolver>{
     networking_profile: config::ResolvedNetworkingProfile<R>,
     parse_tx: Sender<ParserTask>,
 }
@@ -220,6 +228,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
 }
 
 impl<R: Resolver> Crawler<R> {
+    pub fn new_default() -> anyhow::Result<Crawler<R>> {
+        let concurrency_profile = config::ConcurrencyProfile::default();
+        let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+
+        let networking_profile = config::NetworkingProfile::default().resolve()?;
+        Ok(Crawler::new(networking_profile, &pp))
+    }
+
     pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, pp: &ParserProcessorHandle) -> Crawler<R> {
         Self::_new(networking_profile, pp.tx.clone())
     }
