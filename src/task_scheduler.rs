@@ -42,8 +42,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     fn schedule(&mut self, task: Arc<Task>) {
         self.pages_pending += 1;
 
-        //we use try_send as it's faster and channel is unbounded
-        let r = self.tasks_tx.try_send(task);
+        let r = self.tasks_tx.send(task);
         if r.is_err() {
             panic!("cannot send task to tasks_tx! should never ever happen!")
         }
