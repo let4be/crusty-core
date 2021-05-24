@@ -94,10 +94,9 @@ async fn main() -> Result<()> {
         ..CrawlingRulesOptions::default()
     };
     let rules = CrawlingRules::new(rules_options)
-        .with_task_expander(||DataExtractor{});
+        .with_task_expander(|| DataExtractor{});
 
     let (update_tx, update_rx) = ch_unbounded();
-
     let h_sub = tokio::spawn(process_responses(update_rx));
 
     let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
