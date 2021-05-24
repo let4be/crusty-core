@@ -5,9 +5,9 @@ use crate::types as rt;
 pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn expand(
         &self,
-        ctx: &mut rt::JobContext<JS, TS>,
+        ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
-        status: &rt::Status,
+        status: &rt::HttpStatus,
         document: &select::document::Document,
     );
 }
@@ -19,9 +19,9 @@ pub struct FollowLinks {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for FollowLinks {
     fn expand(
         &self,
-        ctx: &mut rt::JobContext<JS, TS>,
+        ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
-        _status: &rt::Status,
+        _status: &rt::HttpStatus,
         document: &select::document::Document,
     ) {
         let links: Vec<rt::Link> = document
@@ -52,9 +52,9 @@ pub struct LoadImages {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for LoadImages {
     fn expand(
         &self,
-        ctx: &mut rt::JobContext<JS, TS>,
+        ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
-        _status: &rt::Status,
+        _status: &rt::HttpStatus,
         document: &select::document::Document,
     ) {
         let links: Vec<rt::Link> = document

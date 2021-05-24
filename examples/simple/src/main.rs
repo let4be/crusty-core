@@ -1,7 +1,7 @@
 use crusty_core::{
     ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, TaskExpander,
     types::{
-        Job, JobContext as JobCtx, Task, Status as HttpStatus, JobStatus,
+        Job, JobCtx, Task, HttpStatus, JobStatus,
         select::predicate::Name, select::document::Document
     },
     config,

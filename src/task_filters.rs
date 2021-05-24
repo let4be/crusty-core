@@ -13,7 +13,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &mut self,
-        ctx: &mut rt::JobContext<JS, TS>,
+        ctx: &mut rt::JobCtx<JS, TS>,
         task_seq_num: usize,
         task: &mut rt::Task,
     ) -> Result;
@@ -51,7 +51,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
     fn name(&self) -> &'static str {
         "SameDomain"
     }
-    fn accept(&mut self, ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if task.link.target == rt::LinkTarget::Load {
             return Result::Accept;
         }
@@ -82,7 +82,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for TotalPa
     fn name(&self) -> &'static str {
         "PageBudget"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, _: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> Result {
         if self.budget >= self.allocated_budget {
             return Result::Term;
         }
@@ -104,7 +104,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPer
     fn name(&self) -> &'static str {
         "LinkPerPageBudget"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Result {
         if seq_num > self.current_task_seq_num {
             self.links_within_current_task = 0;
         }
@@ -130,7 +130,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for PageLev
     fn name(&self) -> &'static str {
         "PageLevel"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if task.level >= self.max_level {
             return Result::Term;
         }
@@ -148,7 +148,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSet
     fn name(&self) -> &'static str {
         "HashSetDedup"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if self.visited.contains(task.link.url.as_str()) {
             return Result::Skip;
         }
@@ -170,7 +170,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for MaxRedi
     fn name(&self) -> &'static str {
         "MaxRedirect"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobContext<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
         if task.link.redirect > self.max_redirect {
             return Result::Skip;
         }

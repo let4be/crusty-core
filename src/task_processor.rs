@@ -65,7 +65,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         task: Arc<Task>,
         client: &hyper::Client<C>,
         is_head: bool,
-    ) -> Result<(Status, hyper::Response<hyper::Body>)> {
+    ) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
         let mut status_metrics = StatusMetrics{wait_time: task.queued_at.elapsed(), ..Default::default()};
 
         let uri = hyper::Uri::from_str(task.link.url.as_str())
@@ -96,7 +96,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         status_metrics.status_time = t.elapsed();
         let rs = resp.status();
 
-        let status = Status {
+        let status = HttpStatus {
             started_processing_on: t,
             status_code: rs.as_u16() as i32,
             headers: resp.headers().clone(),
@@ -125,7 +125,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     async fn load(
         &mut self,
         task: Arc<Task>,
-        status: &Status,
+        status: &HttpStatus,
         stats: &hyper_utils::Stats,
         mut resp: hyper::Response<hyper::Body>,
     ) -> Result<(LoadData, Box<dyn std::io::Read + Sync + Send>)> {
@@ -179,7 +179,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     async fn follow(
         &mut self,
         task: Arc<Task>,
-        status: Status,
+        status: HttpStatus,
         reader: Box<dyn std::io::Read + Sync + Send>,
     ) -> Result<FollowData> {
         let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);

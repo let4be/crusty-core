@@ -11,9 +11,9 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     fn name(&self) -> &'static str;
     fn accept(
         &self,
-        ctx: &mut rt::JobContext<JS, TS>,
+        ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
-        status: &rt::Status,
+        status: &rt::HttpStatus,
     ) -> Action;
 }
 
@@ -26,9 +26,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Content
     fn name(&self) -> &'static str { "ContentTypeFilter" }
     fn accept(
         &self,
-        _ctx: &mut rt::JobContext<JS, TS>,
+        _ctx: &mut rt::JobCtx<JS, TS>,
         _task: &rt::Task,
-        status: &rt::Status,
+        status: &rt::HttpStatus,
     ) -> Action {
         let content_type = status.headers.get(http::header::CONTENT_TYPE);
         if content_type.is_none() {
@@ -70,9 +70,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
     fn name(&self) -> &'static str { "RedirectLoadFilter" }
     fn accept(
         &self,
-        ctx: &mut rt::JobContext<JS, TS>,
+        ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
-        status: &rt::Status,
+        status: &rt::HttpStatus,
     ) -> Action {
         let sc = status.status_code;
         if sc != 301 && sc != 302 && sc != 303 && sc != 307 {

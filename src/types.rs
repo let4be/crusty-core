@@ -44,7 +44,7 @@ pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
     pub url: url::Url,
     pub settings: config::CrawlerSettings,
     pub rules: Arc<Box<dyn JobRules<JS, TS>>>,
-    pub ctx: JobContext<JS, TS>
+    pub ctx: JobCtx<JS, TS>
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
@@ -53,7 +53,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<
             url: job.url.clone(),
             settings: job.settings,
             rules: Arc::new(job.rules),
-            ctx: JobContext::new(job.url, job.job_state, TS::default())
+            ctx: JobCtx::new(job.url, job.job_state, TS::default())
         }
     }
 }
@@ -122,7 +122,7 @@ impl Link {
 }
 
 #[derive(Clone)]
-pub struct Status {
+pub struct HttpStatus {
     pub started_processing_on: Instant,
     pub status_code: i32,
     pub headers: http::HeaderMap<http::HeaderValue>,
@@ -149,7 +149,7 @@ pub struct FollowMetrics {
 
 pub enum StatusResult {
     None,
-    Ok(Status),
+    Ok(HttpStatus),
     Err(Error)
 }
 
@@ -200,7 +200,7 @@ pub struct Task {
 pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
     pub task: Arc<Task>,
     pub status: JobStatus,
-    pub context: JobContext<JS, TS>
+    pub context: JobCtx<JS, TS>
 }
 
 pub struct ParserTask {
@@ -226,7 +226,7 @@ pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {
 impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
 #[derive(Clone)]
-pub struct JobContext<JS, TS> {
+pub struct JobCtx<JS, TS> {
     pub started_at : Instant,
     pub root_url : Url,
     pub job_state: Arc<Mutex<JS>>,
@@ -234,7 +234,7 @@ pub struct JobContext<JS, TS> {
     links: Vec<Arc<Link>>,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues> JobContext<JS, TS> {
+impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
     pub fn new(root_url: Url, job_state: JS, task_state: TS) -> Self {
         Self {
             started_at: Instant::now(),

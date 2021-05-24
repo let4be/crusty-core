@@ -5,7 +5,7 @@ use crusty_core::{
     Crawler,
     TaskExpander,
     types::{
-        LinkTarget, Job, JobContext, Task, Status as HttpStatus, JobStatus, JobUpdate,
+        LinkTarget, Job, JobCtx, Task, HttpStatus, JobStatus, JobUpdate,
         select::predicate::Name, select::document::Document,
         async_channel::unbounded,
         async_channel::Receiver
@@ -48,7 +48,7 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut JobContext<JobState, TaskState>, task: &Task, _: &HttpStatus, doc: &Document) {
+    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, task: &Task, _: &HttpStatus, doc: &Document) {
         let title = doc
             .find(Name("title")).next().map(|v|v.text());
         if let Some(title) = title {
