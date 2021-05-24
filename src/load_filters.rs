@@ -2,7 +2,7 @@
 use crate::internal_prelude::*;
 use crate::types as rt;
 
-pub enum LoadFilterAction {
+pub enum Action {
     Skip,
     Term,
 }
@@ -14,5 +14,5 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
         ctx: &rt::JobCtx<JS, TS>,
         task: &rt::Task,
         status: &rt::HttpStatus,
-    ) -> LoadFilterAction;
+    ) -> Action;
 }

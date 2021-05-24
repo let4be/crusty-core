@@ -61,17 +61,17 @@ impl Resolver for AsyncHyperResolver {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct AsyncHyperResolverAdaptor<R>{
+pub(crate) struct Adaptor<R>{
     resolver: Arc<R>
 }
 
-impl<R: Resolver> AsyncHyperResolverAdaptor<R> {
-    pub fn new(resolver: Arc<R>) -> AsyncHyperResolverAdaptor<R> {
+impl<R: Resolver> Adaptor<R> {
+    pub fn new(resolver: Arc<R>) -> Adaptor<R> {
         Self { resolver }
     }
 }
 
-impl<R: Resolver> Service<Name> for AsyncHyperResolverAdaptor<R> {
+impl<R: Resolver> Service<Name> for Adaptor<R> {
     type Response = std::vec::IntoIter<SocketAddr>;
     type Error = io::Error;
     type Future = PinnedFut<Result<Self::Response, Self::Error>>;

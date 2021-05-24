@@ -67,7 +67,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         client: &hyper::Client<C>,
         is_head: bool,
     ) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
-        let mut status_metrics = StatusMetrics{wait_time: task.queued_at.elapsed(), ..Default::default()};
+        let mut status_metrics = StatusMetrics{ wait_dur: task.queued_at.elapsed(), ..Default::default()};
 
         let uri = hyper::Uri::from_str(task.link.url.as_str())
             .with_context(|| format!("cannot create http uri {}", task.link.url.as_str()))?;
@@ -94,7 +94,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         }
 
         let resp = resp.with_context(|| "cannot make http get")?;
-        status_metrics.status_time = t.elapsed();
+        status_metrics.status_dur = t.elapsed();
         let rs = resp.status();
 
         let status = HttpStatus {
@@ -153,17 +153,17 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             reader = Box::new(body.reader()) as Box<dyn std::io::Read + Sync + Send>
         }
 
-        load_metrics.load_time = status.started_processing_on.elapsed();
+        load_metrics.load_dur = status.started_processing_on.elapsed();
 
         let mut term_by = None;
         for filter in self.load_filters.iter() {
             let r = filter.accept(&self.job.ctx, &task, &status);
             match r {
-                load_filters::LoadFilterAction::Term => {
+                load_filters::Action::Term => {
                     term_by = Some(filter.name());
                     break
                 }
-                load_filters::LoadFilterAction::Skip => {}
+                load_filters::Action::Skip => {}
             }
         }
 
@@ -201,7 +201,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
                 Ok((FollowData{
                     metrics: FollowMetrics{
-                        parse_time: t.elapsed(),
+                        parse_dur: t.elapsed(),
                     },
                 }, job_ctx.consume_links()))
             }

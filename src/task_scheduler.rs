@@ -49,33 +49,33 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         }
     }
 
-    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Result {
+    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Action {
         let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
         for filter in &mut self.task_filters {
             match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
-                task_filters::Result::Accept => continue,
-                task_filters::Result::Skip => {
+                task_filters::Action::Accept => continue,
+                task_filters::Action::Skip => {
                     if task.is_root() {
                         warn!(action = "skip", filter_name = filter.name(), action);
                     } else {
                         trace!(action = "skip", filter_name = filter.name(), action);
                     }
-                    return task_filters::Result::Skip
+                    return task_filters::Action::Skip
                 },
-                task_filters::Result::Term => {
+                task_filters::Action::Term => {
                     if task.is_root() {
                         warn!(action = "term", filter_name = filter.name(), action);
                     } else {
                         trace!(action = "term", filter_name = filter.name(), action);
                     }
-                    return task_filters::Result::Term
+                    return task_filters::Action::Term
                 },
             }
         }
 
         trace!(action = "scheduled", action);
-        task_filters::Result::Accept
+        task_filters::Action::Accept
     }
 
     async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
@@ -91,10 +91,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                     (self.schedule_filter(&mut task), task)
                 })
                 .take_while(|(r, _)|{
-                    *r != task_filters::Result::Term
+                    *r != task_filters::Action::Term
                 })
                 .filter_map(|(r, task)| {
-                    if r == task_filters::Result::Skip {
+                    if r == task_filters::Action::Skip {
                         return None
                     }
                     Some(task)
@@ -119,7 +119,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                 "Starting..."
             );
 
-            let is_accepted = self.schedule_filter(&mut root_task) == task_filters::Result::Accept;
+            let is_accepted = self.schedule_filter(&mut root_task) == task_filters::Action::Accept;
             let root_task = Arc::new(root_task);
             if is_accepted {
                 self.schedule(Arc::clone(&root_task));
@@ -147,16 +147,16 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             }
 
             trace!("Finishing..., pages remaining = {}", self.pages_pending);
-            let err = if is_hard_timeout {
-                Some(JobError::JobFinishedByHardTimeout)
+            let res = if is_hard_timeout {
+                Err(JobError::JobFinishedByHardTimeout)
             } else if is_soft_timeout {
-                Some(JobError::JobFinishedBySoftTimeout)
+                Err(JobError::JobFinishedBySoftTimeout)
             } else {
-                None
+                Ok(JobData{})
             };
             Ok(JobUpdate {
                 task: root_task,
-                status: JobStatus::Finished(JobData { err }),
+                status: JobStatus::Finished(res),
                 context: self.job.ctx,
             })
         }).instrument())

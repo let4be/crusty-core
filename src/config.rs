@@ -13,7 +13,7 @@ use std::{
 
 use serde::{Deserialize, Deserializer, de};
 
-pub type Result<T> = types::Result<T>;
+type Result<T> = types::Result<T>;
 
 #[derive(Clone, Debug)]
 pub struct CLevel(pub Level);
@@ -136,6 +136,21 @@ impl Default for ConcurrencyProfile {
     }
 }
 
+impl ConcurrencyProfile {
+    pub fn transit_buffer_size(&self) -> usize {
+        self.domain_concurrency * 10
+    }
+
+    pub fn job_tx_buffer_size(&self) -> usize
+    {
+        self.domain_concurrency * 3
+    }
+
+    pub fn job_update_buffer_size(&self) -> usize {
+        self.domain_concurrency * 3
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct NetworkingProfileValues {
     pub connect_timeout: Option<CDuration>,
@@ -166,13 +181,11 @@ pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
     pub resolver: Option<Arc<R>>
 }
 
-// apparently need to manually define this, because rust wants user to manually specify types otherwise
-impl Default for NetworkingProfile {
+impl Default for NetworkingProfile<AsyncHyperResolver> {
     fn default() -> Self {
-        let resolver : Option<Arc<AsyncHyperResolver>> = None;
         Self{
             values: NetworkingProfileValues::default(),
-            resolver
+            resolver: None
         }
     }
 }
@@ -201,21 +214,6 @@ impl<R: Resolver> ResolvedNetworkingProfile<R> {
             values: p.values,
             resolver
         })
-    }
-}
-
-impl ConcurrencyProfile {
-    pub fn transit_buffer_size(&self) -> usize {
-        self.domain_concurrency * 10
-    }
-
-    pub fn job_tx_buffer_size(&self) -> usize
-    {
-        self.domain_concurrency * 3
-    }
-
-    pub fn job_update_buffer_size(&self) -> usize {
-        self.domain_concurrency * 3
     }
 }
 

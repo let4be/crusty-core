@@ -131,20 +131,20 @@ pub struct HttpStatus {
 
 #[derive(Clone, Default)]
 pub struct StatusMetrics {
-    pub wait_time: Duration,
-    pub status_time: Duration,
+    pub wait_dur: Duration,
+    pub status_dur: Duration,
 }
 
 #[derive(Clone, Default)]
 pub struct LoadMetrics {
-    pub load_time: Duration,
+    pub load_dur: Duration,
     pub read_size: usize,
     pub write_size: usize,
 }
 
 #[derive(Clone, Default)]
 pub struct FollowMetrics {
-    pub parse_time: Duration,
+    pub parse_dur: Duration,
 }
 
 pub enum StatusResult {
@@ -182,12 +182,11 @@ pub struct FollowData {
 }
 
 pub struct JobData {
-    pub err: Option<JobError>
 }
 
 pub enum JobStatus {
     Processing(StatusData),
-    Finished(JobData)
+    Finished(std::result::Result<JobData, JobError>)
 }
 
 #[derive(Clone)]
@@ -330,7 +329,7 @@ impl fmt::Display for StatusResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StatusResult::Ok(ref r) => {
-                write!(f, "[{}] wait {}ms / status {}ms", r.status_code, r.status_metrics.wait_time.as_millis(), r.status_metrics.status_time.as_millis())
+                write!(f, "[{}] wait {}ms / status {}ms", r.status_code, r.status_metrics.wait_dur.as_millis(), r.status_metrics.status_dur.as_millis())
             },
             StatusResult::Err(ref err) => {
                 write!(f, "[err]: {}", err.to_string())
@@ -348,7 +347,7 @@ impl fmt::Display for LoadResult {
             LoadResult::Ok(ref r) => {
                 let m = &r.metrics;
                 write!(f, "loaded {}ms / write {} / read {}",
-                       m.load_time.as_millis(),
+                       m.load_dur.as_millis(),
                        m.write_size.file_size(file_size_opts::CONVENTIONAL).unwrap(),
                        m.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap())
             },
@@ -368,7 +367,7 @@ impl fmt::Display for FollowResult {
             FollowResult::Ok(ref r) => {
                 let m = &r.metrics;
                 write!(f, "parsed {}ms",
-                       m.parse_time.as_millis())
+                       m.parse_dur.as_millis())
             },
             FollowResult::Err(ref err) => {
                 write!(f, "[err following]: {}", err.to_string())
@@ -386,17 +385,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
             JobStatus::Processing(ref r) => {
                 write!(f, "{} {} (load: {}) | (follow: {})", r.head_status, r.status, r.load_data, r.follow_data)
             },
-            JobStatus::Finished(ref r) => {
-                if r.err.is_some() {
-                    write!(f, "[finished : {:?}] {}",
-                        r.err.as_ref().unwrap(),
-                        self.task
-                    )
-                } else {
-                    write!(f, "[finished] {}",
-                        self.task
-                    )
-                }
+            JobStatus::Finished(Ok(ref r)) => {
+                write!(f, "[finished] {} {}", self.task, r)
+            },
+            JobStatus::Finished(Err(ref err)) => {
+                write!(f, "[finished : {:?}] {}", err, self.task)
             }
         }
     }
@@ -408,6 +401,12 @@ impl fmt::Display for Link {
                self.url.as_str(),
                self.target,
         )
+    }
+}
+
+impl fmt::Display for JobData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "" )
     }
 }
 

@@ -3,7 +3,7 @@ use crate::internal_prelude::*;
 use crate::{
     types::*,
     parser_processor::ParserProcessor,
-    parser_processor::ParserProcessorHandle,
+    parser_processor::Handle,
     task_scheduler::*,
     task_processor::*,
     config,
@@ -12,7 +12,7 @@ use crate::{
     status_filters,
     load_filters,
     task_expanders,
-    resolver::AsyncHyperResolverAdaptor,
+    resolver::Adaptor,
     resolver::AsyncHyperResolver,
     resolver::Resolver
 };
@@ -180,13 +180,13 @@ struct HttpClientFactory<R: Resolver> {
 }
 
 type HttpClient<R> = hyper::Client<HttpConnector<R>>;
-type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<AsyncHyperResolverAdaptor<R>>>>;
+type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<Adaptor<R>>>>;
 
 impl<R: Resolver> HttpClientFactory<R> {
     fn make(&self) -> (HttpClient<R>, hyper_utils::Stats) {
         let v = self.networking_profile.values.clone();
 
-        let resolver_adaptor = AsyncHyperResolverAdaptor::new(Arc::clone(&self.networking_profile.resolver));
+        let resolver_adaptor = Adaptor::new(Arc::clone(&self.networking_profile.resolver));
         let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
         http.set_connect_timeout(v.connect_timeout.clone().map(|v| *v));
 
@@ -227,6 +227,12 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
     }
 }
 
+impl<JS: JobStateValues, TS: TaskStateValues> CrawlerIter<JS, TS> {
+    pub fn join(self) -> tokio::task::JoinHandle<Result<()>> {
+        self._h
+    }
+}
+
 impl Crawler<AsyncHyperResolver> {
     pub fn new_default() -> anyhow::Result<Crawler<AsyncHyperResolver>> {
         let concurrency_profile = config::ConcurrencyProfile::default();
@@ -238,7 +244,7 @@ impl Crawler<AsyncHyperResolver> {
 }
 
 impl<R: Resolver> Crawler<R> {
-    pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, pp: &ParserProcessorHandle) -> Crawler<R> {
+    pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, pp: &Handle) -> Crawler<R> {
         Self::_new(networking_profile, pp.tx.clone())
     }
 
@@ -320,7 +326,7 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
 pub type MultiCrawlerTuple<JS, TS, R> = (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, R> {
 
-    pub fn new(pp_h: &ParserProcessorHandle, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>) -> MultiCrawlerTuple<JS, TS, R> {
+    pub fn new(pp_h: &Handle, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>) -> MultiCrawlerTuple<JS, TS, R> {
         let (job_tx, job_rx) = bounded_ch::<Job<JS, TS>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {

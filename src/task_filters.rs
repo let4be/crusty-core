@@ -3,7 +3,7 @@ use crate::internal_prelude::*;
 use crate::types as rt;
 
 #[derive(PartialEq)]
-pub enum Result {
+pub enum Action {
     Accept,
     Skip,
     Term,
@@ -16,7 +16,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
         ctx: &mut rt::JobCtx<JS, TS>,
         task_seq_num: usize,
         task: &mut rt::Task,
-    ) -> Result;
+    ) -> Action;
 }
 
 pub struct SameDomain {
@@ -51,9 +51,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
     fn name(&self) -> &'static str {
         "SameDomain"
     }
-    fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
         if task.link.target == rt::LinkTarget::Load {
-            return Result::Accept;
+            return Action::Accept;
         }
 
         let domain = task.link.url.domain().unwrap_or("_");
@@ -62,9 +62,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
         let root_domain = root_url.domain().unwrap_or("");
         if root_domain.strip_prefix(&self.strip_prefix).unwrap_or(root_domain) == domain.strip_prefix(&self.strip_prefix).unwrap_or(domain)
         {
-            return Result::Accept;
+            return Action::Accept;
         }
-        Result::Skip
+        Action::Skip
     }
 }
 
@@ -82,12 +82,12 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for TotalPa
     fn name(&self) -> &'static str {
         "PageBudget"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> Action {
         if self.budget >= self.allocated_budget {
-            return Result::Term;
+            return Action::Term;
         }
         self.budget += 1;
-        Result::Accept
+        Action::Accept
     }
 }
 
@@ -104,15 +104,15 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPer
     fn name(&self) -> &'static str {
         "LinkPerPageBudget"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Action {
         if seq_num > self.current_task_seq_num {
             self.links_within_current_task = 0;
         }
         self.links_within_current_task += 1;
         if self.links_within_current_task > self.allocated_budget {
-            return Result::Term;
+            return Action::Term;
         }
-        Result::Accept
+        Action::Accept
     }
 }
 
@@ -130,11 +130,11 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for PageLev
     fn name(&self) -> &'static str {
         "PageLevel"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
         if task.level >= self.max_level {
-            return Result::Term;
+            return Action::Term;
         }
-        Result::Accept
+        Action::Accept
     }
 }
 
@@ -148,13 +148,13 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSet
     fn name(&self) -> &'static str {
         "HashSetDedup"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
         if self.visited.contains(task.link.url.as_str()) {
-            return Result::Skip;
+            return Action::Skip;
         }
 
         self.visited.insert(task.link.url.to_string());
-        Result::Accept
+        Action::Accept
     }
 }
 
@@ -170,11 +170,11 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for MaxRedi
     fn name(&self) -> &'static str {
         "MaxRedirect"
     }
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
         if task.link.redirect > self.max_redirect {
-            return Result::Skip;
+            return Action::Skip;
         }
-        Result::Accept
+        Action::Accept
     }
 }
 
