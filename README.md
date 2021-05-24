@@ -48,7 +48,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let crawler = Crawler::<AsyncHyperResolver>::new_default()?;
+    let crawler = Crawler::new_default()?;
 
     let settings = config::CrawlingSettings::default();
     let rules = CrawlingRules::default().with_task_expander(|| DataExtractor{} );

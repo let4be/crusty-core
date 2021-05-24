@@ -169,9 +169,10 @@ pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
 // apparently need to manually define this, because rust wants user to manually specify types otherwise
 impl Default for NetworkingProfile {
     fn default() -> Self {
+        let resolver : Option<Arc<AsyncHyperResolver>> = None;
         Self{
             values: NetworkingProfileValues::default(),
-            resolver: None
+            resolver
         }
     }
 }

@@ -227,7 +227,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
     }
 }
 
-impl<R: Resolver> Crawler<R> {
+impl Crawler<AsyncHyperResolver> {
     pub fn new_default() -> anyhow::Result<Crawler<AsyncHyperResolver>> {
         let concurrency_profile = config::ConcurrencyProfile::default();
         let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
@@ -235,7 +235,9 @@ impl<R: Resolver> Crawler<R> {
         let networking_profile = config::NetworkingProfile::default().resolve()?;
         Ok(Crawler::new(networking_profile, &pp))
     }
+}
 
+impl<R: Resolver> Crawler<R> {
     pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, pp: &ParserProcessorHandle) -> Crawler<R> {
         Self::_new(networking_profile, pp.tx.clone())
     }
