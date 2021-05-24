@@ -11,7 +11,7 @@
 
 ### Install
 
-for now simply add this to your `Cargo.toml`
+Simply add this to your `Cargo.toml`
 ```
 [dependencies]
 crusty-core = "~0.2.1"
