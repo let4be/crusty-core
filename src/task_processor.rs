@@ -207,13 +207,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             }
         };
 
-        let _ = self.parse_tx.send(ParserTask{
+        let _ = self.parse_tx.send_async(ParserTask{
             payload: Box::new(payload),
             time: Instant::now(),
             res_tx: parse_res_tx,
         }).await;
 
-        let parser_response = parse_res_rx.recv().await.context("cannot follow html document")?;
+        let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
         let (follow_data, links) = parser_response.res?;
         self.job.ctx.push_arced_links(links);
         Ok(follow_data)
@@ -280,8 +280,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         TracingTask::new(span!(Level::INFO, n=n, url=self.job.url.as_str()), async move {
             let (client, mut stats) = (self.client_factory)();
 
-            while let Ok(task) = self.tasks_rx.recv().await {
-                if self.tasks_rx.is_closed() {
+            while let Ok(task) = self.tasks_rx.recv_async().await {
+                if self.tasks_rx.is_disconnected() {
                     break
                 }
 
@@ -294,7 +294,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
                         let ctx = self.job.ctx.clone();
                         status_data.links.extend(self.job.ctx.consume_links());
 
-                        let _ = self.tx.send(JobUpdate {
+                        let _ = self.tx.send_async(JobUpdate {
                             task,
                             status: JobStatus::Processing(status_data),
                             context: ctx,

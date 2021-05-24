@@ -1,6 +1,6 @@
 [package]
 name = "crusty-core"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Sergey F. <let4be@gmail.com>"]
 edition = "2018"
 description = "Library for creating blazing fast and configurable web crawlers"
@@ -21,7 +21,7 @@ opt-level = 3
 [dependencies]
 tracing-tools = "~0.1.0"
 
-async-channel = "~1.6.1"
+flume = "~0.10.5"
 futures-lite = "~1.11.3"
 serde = {version = "~1.0.125", features = ["derive"] }
 tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }

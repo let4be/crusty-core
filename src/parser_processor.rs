@@ -19,6 +19,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn join(self) -> tokio::task::JoinHandle<Result<()>> {
+        drop(self.tx);
         self.h
     }
 }
@@ -34,8 +35,8 @@ impl ParserProcessor {
 
     fn process(&self, n: usize) -> PinnedTask {
         TracingTask::new(span!(Level::INFO, n=n), async move {
-            while let Ok(task) = futures_lite::future::block_on(self.rx.recv()) {
-                if task.res_tx.is_closed() {
+            while let Ok(task) = self.rx.recv() {
+                if task.res_tx.is_disconnected() {
                     continue;
                 }
 
@@ -45,11 +46,11 @@ impl ParserProcessor {
                 let res = payload();
                 let work_time = t.elapsed();
 
-                let _ = futures_lite::future::block_on(task.res_tx.send(ParserResponse {
+                let _ = task.res_tx.send(ParserResponse {
                     res,
                     wait_time,
                     work_time
-                }));
+                });
             }
 
             Ok(())

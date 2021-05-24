@@ -223,7 +223,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
     type Item = JobUpdate<JS, TS>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        futures_lite::future::block_on(self.rx.recv()).ok()
+        self.rx.recv().ok()
     }
 }
 
@@ -256,7 +256,7 @@ impl<R: Resolver> Crawler<R> {
     }
 
     pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>) -> CrawlerIter<JS, TS> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = unbounded_ch();
 
         let h = tokio::spawn(async move {
             self.go(job,tx).await?;
@@ -308,7 +308,7 @@ impl<R: Resolver> Crawler<R> {
             }
             trace!("Workers are done - sending notification about job done!");
 
-            let _ = update_tx.send(job_finishing_update).await;
+            let _ = update_tx.send_async(job_finishing_update).await;
             Ok(())
         }).instrument()
     }
@@ -339,7 +339,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
     }
 
     async fn process(self) -> Result<()> {
-        while let Ok(job) = self.job_rx.recv().await {
+        while let Ok(job) = self.job_rx.recv_async().await {
             let crawler = Crawler::_new( self.networking_profile.clone(), self.parse_tx.clone());
             let _ = crawler.go(job, self.update_tx.clone()).await;
         }

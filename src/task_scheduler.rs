@@ -106,7 +106,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             }
         }
 
-        let _ = self.update_tx.send(task_response).await;
+        let _ = self.update_tx.send_async(task_response).await;
     }
 
     pub(crate) fn go<'a>(mut self) -> Result<PinnedTask<'a, JobUpdate<JS, TS>>> {
@@ -131,7 +131,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 
             while self.pages_pending > 0 {
                 tokio::select! {
-                    res = self.job_update_rx.recv() => {
+                    res = self.job_update_rx.recv_async() => {
                         self.process_task_response(res.unwrap(), is_soft_timeout).await;
                     }
 

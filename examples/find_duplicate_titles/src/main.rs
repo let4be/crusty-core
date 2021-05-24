@@ -55,7 +55,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
 }
 
 async fn process_responses(rx: ChReceiver<JobUpdate<JobState, TaskState>>) {
-    while let Ok(r) = rx.recv().await {
+    while let Ok(r) = rx.recv_async().await {
         info!("- {}, task state: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
             let mut ctx = r.context.job_state.lock().unwrap();
@@ -101,6 +101,7 @@ async fn main() -> Result<()> {
 
     let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
     crawler.go(job, update_tx).await?;
+    drop(crawler);
 
     let _ = pp.join().await?;
     let _ = h_sub.await?;

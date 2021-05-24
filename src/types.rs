@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
 pub use select;
-pub use async_channel;
+pub use flume;
 use crate::{
     task_filters,
     status_filters,
