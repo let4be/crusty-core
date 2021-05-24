@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::prelude::*;
+use crate::internal_prelude::*;
 pub use select;
 pub use async_channel;
 use crate::{

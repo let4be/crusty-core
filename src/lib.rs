@@ -1,4 +1,4 @@
-mod prelude;
+mod internal_prelude;
 
 mod crawler;
 pub use crawler::*;

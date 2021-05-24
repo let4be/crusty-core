@@ -1,10 +1,11 @@
 #[allow(unused_imports)]
-use crate::prelude::*;
+use crate::internal_prelude::*;
 use crate::{types::*, status_filters, load_filters, hyper_utils};
 
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
+use rand::{Rng, thread_rng};
 
 pub(crate) trait LikeHttpConnector: hyper::client::connect::Connect + Clone + Send + Sync + 'static {}
 impl<T: hyper::client::connect::Connect + Clone + Send + Sync + 'static> LikeHttpConnector for T{}
@@ -302,10 +303,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
                     _ = timeout => break
                 }
 
-                if self.job.settings.delay.as_millis() > 0 {
+                if self.job.settings.delay.as_millis() > 0 || self.job.settings.delay_jitter.as_millis() > 0 {
+                    let jitter_ms = {
+                        let mut rng = thread_rng();
+                        Duration::from_millis(rng.gen_range(0..self.job.settings.delay_jitter.as_millis()) as u64)
+                    };
+
                     let timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
                     tokio::select! {
-                        _ = time::sleep(*self.job.settings.delay) => {}
+                        _ = time::sleep(*self.job.settings.delay+jitter_ms) => {}
                         _ = timeout => break
                     }
                 }

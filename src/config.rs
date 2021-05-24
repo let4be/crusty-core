@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::prelude::*;
+use crate::internal_prelude::*;
 use crate::{
     types,
     resolver::AsyncHyperResolver,
@@ -224,6 +224,7 @@ pub struct CrawlingSettings {
     pub concurrency: usize,
     pub max_response_size: CBytes,
     pub delay: CDuration,
+    pub delay_jitter: CDuration,
     pub load_timeout: CDuration,
     pub job_soft_timeout: CDuration,
     pub job_hard_timeout: CDuration,
@@ -253,6 +254,7 @@ impl Default for CrawlingSettings {
             concurrency: 2,
             internal_read_buffer_size: CBytes(32 * 1024),
             delay: CDuration::from_secs(1),
+            delay_jitter: CDuration::from_millis(1000),
             job_hard_timeout: CDuration::from_secs(60),
             job_soft_timeout: CDuration::from_secs(30),
             load_timeout: CDuration::from_secs(10),
