@@ -1,12 +1,11 @@
 use crusty_core::{
     ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, task_expanders::TaskExpander,
     types::{
-        Job, JobContext, Task, Status as HttpStatus, JobStatus,
+        Job, JobContext as JobCtx, Task, Status as HttpStatus, JobStatus,
         select::predicate::Name, select::document::Document
     },
     config,
 };
-
 use anyhow::{Context as _};
 
 #[derive(Debug, Clone, Default)]
@@ -21,10 +20,7 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self,
-              ctx: &mut JobContext<JobState, TaskState>,
-              _task: &Task, _status: &HttpStatus, doc: &Document
-    ) {
+    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) {
         let title = doc.find(Name("title")).next().map(|v|v.text());
         if let Some(title) = title {
             ctx.task_state.lock().unwrap().title = title.clone();
