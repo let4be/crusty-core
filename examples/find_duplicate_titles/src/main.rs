@@ -58,8 +58,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
     {
         let title = document
             .find(Name("title")).next().map(|v|v.text());
-        if title.is_some() {
-            let title = title.unwrap();
+        if let Some(title) = title {
             ctx.task_state.lock().unwrap().title = title.clone();
 
             {
@@ -77,11 +76,11 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
 
 async fn process_responses(rx: Receiver<JobUpdate<JobState, TaskState>>) {
     while let Ok(r) = rx.recv().await {
-        info!("- {}, task context: {:?}", r, r.context.task_state);
+        info!("- {}, task state: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
             let mut ctx = r.context.job_state.lock().unwrap();
             ctx.finalize();
-            info!("final context: {}", ctx);
+            info!("final job state: {}", ctx);
         }
     }
 }
@@ -103,8 +102,7 @@ async fn main() -> Result<()> {
         parser_concurrency: 2,
         ..config::ConcurrencyProfile::default()
     };
-    let (pp, tx_pp) = ParserProcessor::new( concurrency_profile, 1024 * 1024 * 32);
-    let h_pp = tokio::spawn(pp.go());
+    let pp = ParserProcessor::spawn( concurrency_profile, 1024 * 1024 * 32);
 
     let settings = config::CrawlerSettings::default();
     let networking_profile = config::NetworkingProfile::default().resolve()?;
@@ -124,9 +122,9 @@ async fn main() -> Result<()> {
 
     let url = Url::parse("https://bash.im").context("cannot parse url")?;
     let job = Job{url, settings, rules, job_state: JobState::default()};
-    crawler.go(job,tx_pp, update_tx).await?;
+    crawler.go(job, &pp, update_tx).await?;
 
-    let _ = h_pp.await?;
+    let _ = pp.join().await?;
     let _ = h_sub.await?;
     Ok(())
 }

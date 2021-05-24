@@ -2,6 +2,7 @@
 use crate::prelude::*;
 use crate::{
     types::*,
+    parser_processor::ParserProcessorHandle,
     task_scheduler::*,
     task_processor::*,
     config,
@@ -16,8 +17,6 @@ use crate::{
 use std::{
     net::{IpAddr},
 };
-
-use tokio::task::JoinHandle;
 
 #[derive(Clone)]
 pub struct CrawlingRulesOptions {
@@ -176,7 +175,7 @@ pub struct Crawler<R: Resolver>{
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues>{
     rx: Receiver<JobUpdate<JS, TS>>,
-    _h: JoinHandle<Result<()>>
+    _h: tokio::task::JoinHandle<Result<()>>
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
@@ -194,11 +193,12 @@ impl<R: Resolver> Crawler<R> {
         }
     }
 
-    pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>, parse_tx: Sender<ParserTask>) -> CrawlerIter<JS, TS> {
+    pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>, pp: &ParserProcessorHandle) -> CrawlerIter<JS, TS> {
         let (tx, rx) = async_channel::unbounded();
 
+        let parse_tx = pp.tx.clone();
         let h = tokio::spawn(async move {
-            self.go(job, parse_tx,tx).await?;
+            self._go(job, parse_tx,tx).await?;
             Ok::<_, Error>(())
         });
 
@@ -206,6 +206,16 @@ impl<R: Resolver> Crawler<R> {
     }
 
     pub fn go<JS: JobStateValues, TS: TaskStateValues>(
+        &self,
+        job: Job<JS, TS>,
+        pp: &ParserProcessorHandle,
+        update_tx: Sender<JobUpdate<JS, TS>>,
+    ) -> PinnedTask
+    {
+        self._go(job, pp.tx.clone(), update_tx)
+    }
+
+    fn _go<JS: JobStateValues, TS: TaskStateValues>(
         &self,
         job: Job<JS, TS>,
         parse_tx: Sender<ParserTask>,
@@ -258,7 +268,7 @@ impl<R: Resolver> Crawler<R> {
 pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
     job_rx: Receiver<Job<JS, TS>>,
     update_tx: Sender<JobUpdate<JS, TS>>,
-    pp_tx: Sender<ParserTask>,
+    parse_tx: Sender<ParserTask>,
     concurrency_profile: config::ConcurrencyProfile,
     networking_profile: config::ResolvedNetworkingProfile<R>,
 }
@@ -266,22 +276,22 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
 pub type MultiCrawlerTuple<JS, TS, R> = (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, R> {
 
-    pub fn new(pp_tx: Sender<ParserTask>, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>) -> MultiCrawlerTuple<JS, TS, R> {
+    pub fn new(pp_h: &ParserProcessorHandle, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>) -> MultiCrawlerTuple<JS, TS, R> {
         let (job_tx, job_rx) = bounded_ch::<Job<JS, TS>>(concurrency_profile.job_tx_buffer_size());
         let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
         (MultiCrawler {
             job_rx,
             update_tx,
-            pp_tx,
+            parse_tx: pp_h.tx.clone(),
             concurrency_profile,
             networking_profile,
         }, job_tx, update_rx)
     }
 
-    async fn process(&self) -> Result<()> {
+    async fn process(self) -> Result<()> {
         while let Ok(job) = self.job_rx.recv().await {
             let crawler = Crawler::new( self.networking_profile.clone());
-            let _ = crawler.go(job, self.pp_tx.clone(), self.update_tx.clone()).await;
+            let _ = crawler._go(job, self.parse_tx.clone(), self.update_tx.clone()).await;
         }
         Ok(())
     }
