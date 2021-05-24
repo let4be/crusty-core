@@ -16,8 +16,6 @@ use crusty_core::{
 use std::{collections::HashMap, fmt};
 use tracing::{info, Level};
 use tracing_subscriber;
-use anyhow::{Context as _};
-use url::Url;
 
 type Result<T> = anyhow::Result<T>;
 
@@ -115,8 +113,7 @@ async fn main() -> Result<()> {
 
     let h_sub = tokio::spawn(process_responses(update_rx));
 
-    let url = Url::parse("https://bash.im").context("cannot parse url")?;
-    let job = Job::new(url, settings, rules, JobState::default());
+    let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
     crawler.go(job, update_tx).await?;
 
     let _ = pp.join().await?;

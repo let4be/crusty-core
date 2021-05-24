@@ -30,10 +30,12 @@ pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
     pub job_state: JS
 }
 impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
-    pub fn new<R: JobRules<JS, TS>>(url: url::Url, settings: config::CrawlerSettings, rules: R, job_state: JS) -> Job<JS, TS>{
-        Self {
+    pub fn new<R: JobRules<JS, TS>>(url: &str, settings: config::CrawlerSettings, rules: R, job_state: JS) -> anyhow::Result<Job<JS, TS>> {
+        let url = Url::parse(url).context("cannot parse url")?;
+
+        Ok(Self {
             url, settings, rules: Box::new(rules), job_state
-        }
+        })
     }
 }
 

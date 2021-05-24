@@ -6,7 +6,6 @@ use crusty_core::{
     },
     config,
 };
-use anyhow::{Context as _};
 
 #[derive(Debug, Clone, Default)]
 pub struct JobState {
@@ -41,8 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let rules_opt = CrawlingRulesOptions::default();
     let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
 
-    let url = url::Url::parse("https://bash.im").context("cannot parse url")?;
-    let job = Job::new(url, settings, rules, JobState::default());
+    let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
         println!("- {}, task state: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
