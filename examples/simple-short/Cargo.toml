@@ -1,5 +1,5 @@
 [package]
-name = "crusty_simple"
+name = "crusty_simple_short"
 version = "0.1.0"
 authors = ["Sergey F. <let4be@gmail.com>"]
 edition = "2018"
@@ -11,5 +11,5 @@ tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "n
 url = "~2.2.2"
 
 [[bin]]
-name = "crusty_simple"
+name = "crusty_simple_short"
 path = "src/main.rs"
