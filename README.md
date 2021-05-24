@@ -11,12 +11,10 @@
 
 ### Install
 
-right now API is still in development, once it's a bit settled down I will release on crates.io with `0.1.0`
-
 for now simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = {git = "https://github.com/let4be/crusty-core"}
+crusty-core = "~0.2.1"
 ```
 
 ### Example - crawl single website, collect information about `TITLE` tags 
