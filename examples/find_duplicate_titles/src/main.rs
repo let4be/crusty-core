@@ -1,17 +1,4 @@
-use crusty_core::{
-    ParserProcessor,
-    CrawlingRules,
-    CrawlingRulesOptions,
-    Crawler,
-    TaskExpander,
-    types::{
-        LinkTarget, Job, JobCtx, Task, HttpStatus, JobStatus, JobUpdate,
-        select::predicate::Name, select::document::Document,
-        async_channel::unbounded,
-        async_channel::Receiver
-    },
-    config,
-};
+use crusty_core::prelude::*;
 
 use std::{collections::HashMap, fmt};
 use tracing::{info, Level};
@@ -67,7 +54,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
     }
 }
 
-async fn process_responses(rx: Receiver<JobUpdate<JobState, TaskState>>) {
+async fn process_responses(rx: ChReceiver<JobUpdate<JobState, TaskState>>) {
     while let Ok(r) = rx.recv().await {
         info!("- {}, task state: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {
@@ -109,7 +96,7 @@ async fn main() -> Result<()> {
     let rules = CrawlingRules::new(rules_options)
         .with_task_expander(||DataExtractor{});
 
-    let (update_tx, update_rx) = unbounded();
+    let (update_tx, update_rx) = ch_unbounded();
 
     let h_sub = tokio::spawn(process_responses(update_rx));
 

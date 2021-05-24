@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-If you want to get more fancy and configure some stuff
+If you want to get more fancy and configure some stuff or control your imports more precisely
 ```rust
 use crusty_core::{
     ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, TaskExpander,

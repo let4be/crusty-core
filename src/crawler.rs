@@ -228,7 +228,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
 }
 
 impl<R: Resolver> Crawler<R> {
-    pub fn new_default() -> anyhow::Result<Crawler<R>> {
+    pub fn new_default() -> anyhow::Result<Crawler<AsyncHyperResolver>> {
         let concurrency_profile = config::ConcurrencyProfile::default();
         let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 

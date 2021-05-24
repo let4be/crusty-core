@@ -167,7 +167,7 @@ pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
 }
 
 // apparently need to manually define this, because rust wants user to manually specify types otherwise
-impl<R: Resolver> Default for NetworkingProfile<R> {
+impl Default for NetworkingProfile {
     fn default() -> Self {
         Self{
             values: NetworkingProfileValues::default(),
