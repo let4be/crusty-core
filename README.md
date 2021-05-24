@@ -3,7 +3,7 @@
  - highly customizable filtering at each and every step - status code/headers received, page downloaded, link filter
  - built on top of [hyper](https://github.com/hyperium/hyper) (http2 and gzip/deflate baked in)  
  - rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
- - observable with [tracing](https://github.com/tokio-rs/tracing)
+ - observable with [tracing](https://github.com/tokio-rs/tracing) and custom metrics collection(stuff like html parsing time, bytes sent/received)
  - lots of options, almost everything is configurable
  - applicable both for focused and broad crawling
  - scales with ease when you want to crawl millions/billions of domains
