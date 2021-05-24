@@ -7,7 +7,7 @@ description = "Library for creating blazing fast and configurable web crawlers"
 readme = "README.md"
 license = "GPL-3.0"
 repository = "https://github.com/let4be/crusty-core"
-keywords = ["crawler", "spider", "scraper", "rust", "async", "multi-threaded", "hyper", "select"]
+keywords = ["crawler", "spider", "rust", "async", "multi-threaded"]
 
 [profile.dev]
 panic = "abort"
