@@ -273,7 +273,7 @@ impl Link {
         let link_str = href.splitn(2, '#').next().context("cannot prepare link")?;
 
         let url = Url::parse(link_str).unwrap_or(
-            parent.url.join(link_str).with_context(|| format!("cannot join relative href {} to {}", href, parent.url.as_str()))?
+            parent.url.join(link_str).with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))?
         );
 
         Ok(Self {
@@ -366,8 +366,7 @@ impl fmt::Display for FollowResult {
         match self {
             FollowResult::Ok(ref r) => {
                 let m = &r.metrics;
-                write!(f, "parsed {}ms",
-                       m.parse_dur.as_millis())
+                write!(f, "parsed {}ms", m.parse_dur.as_millis())
             },
             FollowResult::Err(ref err) => {
                 write!(f, "[err following]: {}", err.to_string())
@@ -397,10 +396,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
 
 impl fmt::Display for Link {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {:?}",
-               self.url.as_str(),
-               self.target,
-        )
+        write!(f, "{} {:?}", &self.url, self.target)
     }
 }
 
@@ -413,15 +409,9 @@ impl fmt::Display for JobData {
 impl fmt::Display for Task {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.level < 1 {
-            write!(f, "{:#?} (root)",
-                self.link.url.as_str(),
-            )
+            write!(f, "{} (root)", &self.link.url)
         } else {
-            write!(f, "{:#?} ({}) {:#?}",
-                self.link.url.as_str(),
-                self.level,
-                self.link.text,
-            )
+            write!(f, "{} ({}) {}", &self.link.url, self.level, self.link.text)
         }
     }
 }

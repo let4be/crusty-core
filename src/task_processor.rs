@@ -70,7 +70,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         let mut status_metrics = StatusMetrics{ wait_dur: task.queued_at.elapsed(), ..Default::default()};
 
         let uri = hyper::Uri::from_str(task.link.url.as_str())
-            .with_context(|| format!("cannot create http uri {}", task.link.url.as_str()))?;
+            .with_context(|| format!("cannot create http uri {}", &task.link.url))?;
 
         let t = Instant::now();
 
@@ -277,7 +277,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     }
 
     pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
-        TracingTask::new(span!(Level::INFO, n=n, url=self.job.url.as_str()), async move {
+        TracingTask::new(span!(Level::INFO, n=n, url=%self.job.url), async move {
             let (client, mut stats) = (self.client_factory)();
 
             while let Ok(task) = self.tasks_rx.recv_async().await {

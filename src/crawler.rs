@@ -272,7 +272,7 @@ impl<R: Resolver> Crawler<R> {
         update_tx: Sender<JobUpdate<JS, TS>>,
     ) -> PinnedTask
     {
-        TracingTask::new(span!(Level::INFO, url=job.url.as_str()), async move {
+        TracingTask::new(span!(Level::INFO, url=%job.url), async move {
             let job = ResolvedJob::from(job);
 
             let scheduler = TaskScheduler::new(

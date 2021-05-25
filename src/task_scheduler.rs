@@ -51,8 +51,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Action {
         let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
-        let span = span!(Level::INFO, task = format!("{}", task).as_str());
-        let _ = span.enter();
+        let _span = span!(Level::WARN, task = %task).entered();
         for filter in &mut self.task_filters {
             match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
                 task_filters::Action::Accept => continue,
@@ -113,7 +112,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
     pub(crate) fn go<'a>(mut self) -> Result<PinnedTask<'a, JobUpdate<JS, TS>>> {
         let mut root_task = Task::new_root(&self.job.url)?;
 
-        Ok(TracingTask::new(span!(Level::INFO, url = self.job.url.to_string().as_str()), async move {
+        Ok(TracingTask::new(span!(Level::INFO, url = %self.job.url), async move {
             trace!(
                 soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32,
                 hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32,
