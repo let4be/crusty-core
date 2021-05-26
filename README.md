@@ -14,7 +14,7 @@
 Simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = "~0.2.2"
+crusty-core = "~0.2.3"
 ```
 
 ### Example - crawl single website, collect information about `TITLE` tags 
