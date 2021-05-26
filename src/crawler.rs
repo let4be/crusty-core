@@ -23,6 +23,7 @@ use std::{
 
 #[derive(Clone)]
 pub struct CrawlingRulesOptions {
+    pub ignore_reserved_subnets: bool,
     pub max_redirect: usize,
     pub link_target: LinkTarget,
     pub allow_www: bool,
@@ -36,6 +37,7 @@ pub struct CrawlingRulesOptions {
 impl Default for CrawlingRulesOptions{
     fn default() -> Self {
         Self {
+            ignore_reserved_subnets: true,
             max_redirect: 5,
             link_target: LinkTarget::HeadFollow,
             allow_www: true,
@@ -120,6 +122,9 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
             Box::new(task_filters::SameDomain::new(options.allow_www)),
             Box::new(task_filters::HashSetDedup::new()),
         ];
+        if options.ignore_reserved_subnets {
+            task_filters.push(Box::new(task_filters::IgnoreReservedSubnets::new()));
+        }
         if options.page_budget.is_some() {
             task_filters.push(Box::new(task_filters::TotalPageBudget::new(options.page_budget.unwrap())));
         }
