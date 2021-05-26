@@ -199,32 +199,42 @@ impl MaxRedirect {
     }
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for IgnoreReservedSubnets {
-    fn name(&self) -> &'static str {
-        "IgnoreReservedSubnets"
-    }
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
-        if let Some(host) = task.link.url.host() {
-            let ipv4 = host.to_string().parse::<Ipv4Addr>();
-            if let Ok(ip) = ipv4 {
-                for net in RESERVED_IPV4_SUBNETS.iter() {
-                    if net.contains(&ip) {
-                        return Action::Skip
-                    }
-                }
-            }
-
-            let ipv6 = host.to_string().parse::<Ipv6Addr>();
-            if let Ok(ip) = ipv6 {
-                for net in RESERVED_IPV6_SUBNETS.iter() {
-                    if net.contains(&ip) {
-                        return Action::Skip
-                    }
+impl IgnoreReservedSubnets {
+    pub fn is_reserved(maybe_ip: String) -> bool {
+        let ipv4 = maybe_ip.parse::<Ipv4Addr>();
+        if let Ok(ip) = ipv4 {
+            for net in RESERVED_IPV4_SUBNETS.iter() {
+                if net.contains(&ip) {
+                    return true
                 }
             }
         }
 
-        Action::Accept
+        let ipv6 = maybe_ip.parse::<Ipv6Addr>();
+        if let Ok(ip) = ipv6 {
+            for net in RESERVED_IPV6_SUBNETS.iter() {
+                if net.contains(&ip) {
+                    return true
+                }
+            }
+        }
+
+        false
+    }
+}
+
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for IgnoreReservedSubnets {
+    fn name(&self) -> &'static str {
+        "IgnoreReservedSubnets"
+    }
+
+    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
+        if let Some(host) = task.link.url.host() {
+            if Self::is_reserved(host.to_string()) {
+                return Action::Skip
+            }
+        }
+        return Action::Accept
     }
 }
 

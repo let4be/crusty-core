@@ -19,7 +19,7 @@ debug-assertions = false
 opt-level = 3
 
 [dependencies]
-tracing-tools = "~0.1.0"
+tracing-tools = "~0.1.1"
 
 flume = "~0.10.5"
 futures-lite = "~1.11.3"

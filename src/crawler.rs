@@ -277,7 +277,7 @@ impl<R: Resolver> Crawler<R> {
         update_tx: Sender<JobUpdate<JS, TS>>,
     ) -> PinnedTask
     {
-        TracingTask::new(span!(Level::ERROR, url=%job.url), async move {
+        TracingTask::new(span!(url=%job.url), async move {
             let job = ResolvedJob::from(job);
 
             let scheduler = TaskScheduler::new(
@@ -352,7 +352,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
     }
 
     pub fn go(self) -> PinnedTask<'static> {
-        TracingTask::new(span!(Level::ERROR), async move {
+        TracingTask::new(span!(), async move {
             let mut handles = vec![];
             for _ in 0..self.concurrency_profile.domain_concurrency {
                 let h = tokio::spawn({

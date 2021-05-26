@@ -277,7 +277,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
     }
 
     pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
-        TracingTask::new(span!(Level::ERROR, n=n, url=%self.job.url), async move {
+        TracingTask::new(span!(n=n, url=%self.job.url), async move {
             let (client, mut stats) = (self.client_factory)();
 
             while let Ok(task) = self.tasks_rx.recv_async().await {
