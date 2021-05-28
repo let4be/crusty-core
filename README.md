@@ -1,29 +1,7 @@
 # Crusty-core - build your own web crawler!
- - multi-threaded && async on top of [tokio](https://github.com/tokio-rs/tokio)
- - highly customizable filtering at each and every step
-    - custom dns resolver with builtin IP/subnet filtering
-    - status code/headers received(built-in content-type filters work at this step),
-    - page downloaded(say we can decide not to parse DOM),
-    - task filtering, complete control on -what- to follow and -how- to(just resolve dns, head, head+get)
- - built on top of [hyper](https://github.com/hyperium/hyper) (http2 and gzip/deflate baked in)  
- - rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
- - observable with [tracing](https://github.com/tokio-rs/tracing) and custom metrics exposed to user(stuff like html parsing duration, bytes sent/received)
- - lots of options, almost everything is configurable either through options or code
- - applicable both for focused and broad crawling
- - scales with ease when you want to crawl millions/billions of domains
- - it's fast, fast, fast!
-
-### Install
-
-Simply add this to your `Cargo.toml`
-```
-[dependencies]
-crusty-core = "~0.2.3"
-```
 
 ### Example - crawl single website, collect information about `TITLE` tags 
 
-if you are in a hurry:
 ```rust
 use crusty_core::prelude::*;
 
@@ -121,6 +99,30 @@ async fn main() -> anyhow::Result<()> {
     Ok(pp.join().await??)
 }
 ```
+
+### Install
+
+Simply add this to your `Cargo.toml`
+```
+[dependencies]
+crusty-core = "~0.2.3"
+```
+
+### Key capabilities
+
+- multi-threaded && async on top of [tokio](https://github.com/tokio-rs/tokio)
+- highly customizable filtering at each and every step
+    - custom dns resolver with builtin IP/subnet filtering
+    - status code/headers received(built-in content-type filters work at this step),
+    - page downloaded(say we can decide not to parse DOM),
+    - task filtering, complete control on -what- to follow and -how- to(just resolve dns, head, head+get)
+- built on top of [hyper](https://github.com/hyperium/hyper) (http2 and gzip/deflate baked in)
+- rich content extraction with [select](https://github.com/utkarshkukreti/select.rs)
+- observable with [tracing](https://github.com/tokio-rs/tracing) and custom metrics exposed to user(stuff like html parsing duration, bytes sent/received)
+- lots of options, almost everything is configurable either through options or code
+- applicable both for focused and broad crawling
+- scales with ease when you want to crawl millions/billions of domains
+- it's fast, fast, fast!
 
 ### Notes
 
