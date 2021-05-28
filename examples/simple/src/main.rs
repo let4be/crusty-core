@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let rules_opt = CrawlingRulesOptions::default();
     let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
 
-    let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
+    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
         println!("- {}, task state: {:?}", r, r.context.task_state);
         if let JobStatus::Finished(_) = r.status {

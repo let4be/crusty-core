@@ -1,8 +1,9 @@
 use crusty_core::prelude::*;
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, env};
 use tracing::{info, Level};
 use tracing_subscriber;
+use anyhow::anyhow;
 
 type Result<T> = anyhow::Result<T>;
 
@@ -78,6 +79,12 @@ fn configure_tracing() -> Result<()>{
 async fn main() -> Result<()> {
     configure_tracing()?;
 
+    let job_url = if let Ok(job_url) = env::var("JOB_URL") {
+        job_url
+    } else {
+        return Err(anyhow!("please specify JOB_URL env. variable"))
+    };
+
     let concurrency_profile = config::ConcurrencyProfile{
         parser_concurrency: 2,
         ..config::ConcurrencyProfile::default()
@@ -99,7 +106,7 @@ async fn main() -> Result<()> {
     let (update_tx, update_rx) = ch_unbounded();
     let h_sub = tokio::spawn(process_responses(update_rx));
 
-    let job = Job::new("http://bash.im/", settings, rules, JobState::default())?;
+    let job = Job::new(&job_url, settings, rules, JobState::default())?;
     crawler.go(job, update_tx).await?;
     drop(crawler);
 
