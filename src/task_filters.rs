@@ -19,6 +19,32 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
     ) -> Action;
 }
 
+pub struct SelectiveTaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+    link_targets: Vec<rt::LinkTarget>,
+    filter: Box<dyn Filter<JS, TS> + Send + Sync>,
+}
+
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> SelectiveTaskFilter<JS, TS> {
+    pub fn new(link_targets: Vec<rt::LinkTarget>, filter: impl Filter<JS, TS> + Send + Sync + 'static) -> Self {
+        Self {
+            link_targets, filter: Box::new(filter)
+        }
+    }
+}
+
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SelectiveTaskFilter<JS, TS> {
+    fn name(&self) -> &'static str {
+        self.filter.name()
+    }
+    fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> Action {
+        let link_target = self.link_targets.iter().find(|target| target.to_string() == task.link.target.to_string());
+        if link_target.is_none() {
+            return Action::Accept
+        }
+        self.filter.accept( ctx, task_seq_num, task)
+    }
+}
+
 pub struct SameDomain {
     strip_prefix: String,
 }
@@ -52,10 +78,6 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
         "SameDomain"
     }
     fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
-        if task.link.target == rt::LinkTarget::Load {
-            return Action::Accept;
-        }
-
         let domain = task.link.url.host_str().unwrap_or("_");
 
         let root_url =  &ctx.root_url;

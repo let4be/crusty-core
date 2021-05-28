@@ -30,6 +30,7 @@ pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
     pub rules: Box<dyn JobRules<JS, TS>>,
     pub job_state: JS
 }
+
 impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
     pub fn new<R: JobRules<JS, TS>>(url: &str, settings: config::CrawlingSettings, rules: R, job_state: JS) -> anyhow::Result<Job<JS, TS>> {
         let url = Url::parse(url).context("cannot parse url")?;
@@ -92,12 +93,12 @@ pub enum JobError {
 
 #[derive(Clone, PartialEq, Debug )]
 pub enum LinkTarget {
-    JustResolveDNS,
-    Head,
-    Load,
-    HeadLoad,
-    Follow,
-    HeadFollow,
+    JustResolveDNS = 0,
+    Head = 1,
+    Load = 2,
+    HeadLoad = 3,
+    Follow = 4,
+    HeadFollow = 5,
 }
 
 impl fmt::Display for LinkTarget {
