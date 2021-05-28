@@ -82,7 +82,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         self.pages_pending -= 1;
         self.task_seq_num += 1;
 
-        if let (JobStatus::Processing(ref r), false) = (&task_response.status, ignore_links) {
+        if let (JobStatus::Processing(Ok(ref r)), false) = (&task_response.status, ignore_links) {
             let tasks :Vec<_> = r.links.iter()
                 .filter_map(|link| {
                     Task::new(Arc::clone(link), &task_response.task).ok()
@@ -152,7 +152,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
             } else if is_soft_timeout {
                 Err(JobError::JobFinishedBySoftTimeout)
             } else {
-                Ok(JobData{})
+                Ok(JobFinished {})
             };
             Ok(JobUpdate {
                 task: root_task,

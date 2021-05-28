@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
     let (update_tx, update_rx) = ch_unbounded();
     let h_sub = tokio::spawn(process_responses(update_rx));
 
-    let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
+    let job = Job::new("http://192.168.1.1/", settings, rules, JobState::default())?;
     crawler.go(job, update_tx).await?;
     drop(crawler);
 

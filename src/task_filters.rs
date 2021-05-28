@@ -2,15 +2,6 @@
 use crate::internal_prelude::*;
 use crate::types as rt;
 
-use std::net::{
-    Ipv4Addr,
-    Ipv6Addr,
-};
-use ipnet::{
-    Ipv4Net,
-    Ipv6Net,
-};
-
 #[derive(PartialEq)]
 pub enum Action {
     Accept,
@@ -56,10 +47,6 @@ pub struct HashSetDedup {
     visited: std::collections::HashSet<String>,
 }
 
-#[derive(Default)]
-pub struct IgnoreReservedSubnets {
-}
-
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
     fn name(&self) -> &'static str {
         "SameDomain"
@@ -69,10 +56,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
             return Action::Accept;
         }
 
-        let domain = task.link.url.domain().unwrap_or("_");
+        let domain = task.link.url.host_str().unwrap_or("_");
 
         let root_url =  &ctx.root_url;
-        let root_domain = root_url.domain().unwrap_or("");
+        let root_domain = root_url.host_str().unwrap_or("");
         if root_domain.strip_prefix(&self.strip_prefix).unwrap_or(root_domain) == domain.strip_prefix(&self.strip_prefix).unwrap_or(domain)
         {
             return Action::Accept;
@@ -196,99 +183,5 @@ impl MaxRedirect {
         Self {
             max_redirect
         }
-    }
-}
-
-impl IgnoreReservedSubnets {
-    pub fn is_reserved(maybe_ip: String) -> bool {
-        let ipv4 = maybe_ip.parse::<Ipv4Addr>();
-        if let Ok(ip) = ipv4 {
-            for net in RESERVED_IPV4_SUBNETS.iter() {
-                if net.contains(&ip) {
-                    return true
-                }
-            }
-        }
-
-        let ipv6 = maybe_ip.parse::<Ipv6Addr>();
-        if let Ok(ip) = ipv6 {
-            for net in RESERVED_IPV6_SUBNETS.iter() {
-                if net.contains(&ip) {
-                    return true
-                }
-            }
-        }
-
-        false
-    }
-}
-
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for IgnoreReservedSubnets {
-    fn name(&self) -> &'static str {
-        "IgnoreReservedSubnets"
-    }
-
-    fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Action {
-        if let Some(host) = task.link.url.host() {
-            if Self::is_reserved(host.to_string()) {
-                return Action::Skip
-            }
-        }
-        return Action::Accept
-    }
-}
-
-lazy_static! {
-    static ref RESERVED_IPV4_SUBNETS: Vec<Ipv4Net> = {
-        vec![
-            "0.0.0.0/8",
-            "10.0.0.0/8",
-            "100.64.0.0/10",
-            "127.0.0.0/8",
-            "169.254.0.0/16",
-            "172.16.0.0/12",
-            "192.0.0.0/24",
-            "192.0.2.0/24",
-            "192.88.99.0/24",
-            "192.168.0.0/16",
-            "198.18.0.0/15",
-            "198.51.100.0/24",
-            "203.0.113.0/24",
-            "224.0.0.0/4",
-            "233.252.0.0/24",
-            "240.0.0.0/4",
-            "255.255.255.255/32"
-        ].iter().map(|net|net.parse().unwrap()).collect()
-    };
-
-    static ref RESERVED_IPV6_SUBNETS: Vec<Ipv6Net> = {
-        vec![
-            "::1/128",
-            "::/128",
-            "::ffff:0:0/96",
-            "64:ff9b::/96",
-            "64:ff9b:1::/48",
-            "100::/64",
-            "2001::/23",
-            "2001::/32",
-            "2001:1::1/128",
-            "2001:1::2/128",
-            "2001:2::/48",
-            "2001:3::/32",
-            "2001:4:112::/48",
-            "2001:10::/28",
-            "2001:20::/28",
-            "2001:db8::/32",
-            "2002::/16",
-            "2620:4f:8000::/48",
-            "fc00::/7",
-            "fe80::/10",
-        ].iter().map(|net|net.parse().unwrap()).collect()
-    };
-}
-
-impl IgnoreReservedSubnets {
-    pub fn new() -> Self {
-        Self::default()
     }
 }

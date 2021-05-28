@@ -12,6 +12,7 @@ use crate::{
 
 use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
+use std::net::SocketAddr;
 
 pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::Filter<JS, TS> + Send + Sync>>;
 pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::Filter<JS, TS> + Send + Sync>>;
@@ -91,6 +92,7 @@ pub enum JobError {
 
 #[derive(Clone, PartialEq, Debug )]
 pub enum LinkTarget {
+    JustResolveDNS,
     Head,
     Load,
     HeadLoad,
@@ -121,11 +123,23 @@ impl Link {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct ResolveMetrics {
+    pub resolve_dur: Duration,
+}
+
+#[derive(Clone)]
+pub struct ResolveData {
+    pub addrs: Vec<SocketAddr>,
+    pub metrics: ResolveMetrics,
+}
+
 #[derive(Clone)]
 pub struct HttpStatus {
     pub started_processing_on: Instant,
     pub status_code: i32,
     pub headers: http::HeaderMap<http::HeaderValue>,
+    // todo: rename
     pub status_metrics: StatusMetrics,
 }
 
@@ -169,7 +183,8 @@ pub struct LoadData {
     pub metrics: LoadMetrics,
 }
 
-pub struct StatusData {
+pub struct JobProcessing {
+    pub resolve_data: ResolveData,
     pub head_status: StatusResult,
     pub status: StatusResult,
     pub load_data: LoadResult,
@@ -181,12 +196,12 @@ pub struct FollowData {
     pub metrics: FollowMetrics,
 }
 
-pub struct JobData {
+pub struct JobFinished {
 }
 
 pub enum JobStatus {
-    Processing(StatusData),
-    Finished(std::result::Result<JobData, JobError>)
+    Processing(Result<JobProcessing>),
+    Finished(std::result::Result<JobFinished, JobError>)
 }
 
 #[derive(Clone)]
@@ -325,6 +340,13 @@ impl Task {
     }
 }
 
+impl fmt::Display for ResolveData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let addrs_str = self.addrs.iter().map(|a|a.ip().to_string()).collect::<Vec<String>>().join(", ");
+        write!(f, "[{}] resolve {}ms", addrs_str, self.metrics.resolve_dur.as_millis())
+    }
+}
+
 impl fmt::Display for StatusResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -381,8 +403,11 @@ impl fmt::Display for FollowResult {
 impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.status {
-            JobStatus::Processing(ref r) => {
-                write!(f, "{} {} (load: {}) | (follow: {})", r.head_status, r.status, r.load_data, r.follow_data)
+            JobStatus::Processing(Ok(ref r)) => {
+                write!(f, "{} {} {} (load: {}) | (follow: {})", r.resolve_data, r.head_status, r.status, r.load_data, r.follow_data)
+            },
+            JobStatus::Processing(Err(ref err)) => {
+                write!(f, "[dns error : {:?}] {}", err, self.task)
             },
             JobStatus::Finished(Ok(ref r)) => {
                 write!(f, "[finished] {} {}", self.task, r)
@@ -400,7 +425,7 @@ impl fmt::Display for Link {
     }
 }
 
-impl fmt::Display for JobData {
+impl fmt::Display for JobFinished {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "" )
     }

@@ -3,7 +3,8 @@ use crate::internal_prelude::*;
 use crate::{
     types,
     resolver::AsyncHyperResolver,
-    resolver::Resolver
+    resolver::Resolver,
+    resolver::RESERVED_SUBNETS,
 };
 
 use std::{
@@ -207,7 +208,11 @@ impl<R: Resolver> ResolvedNetworkingProfile<R> {
     fn new(p: NetworkingProfile<R>) -> Result<Self> {
         let mut resolver = p.resolver;
         if resolver.is_none() {
-            resolver = Some(Arc::new(Resolver::new_default().context("cannot create default resolver")?));
+            resolver = Some(Arc::new(
+                R::new_default()
+                    .context("cannot create default resolver")?
+                    .with_net_blacklist(Arc::clone(&RESERVED_SUBNETS))
+            ));
         }
         let resolver = resolver.unwrap();
         Ok(Self {

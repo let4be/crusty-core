@@ -14,16 +14,11 @@ use crate::{
     task_expanders,
     resolver::Adaptor,
     resolver::AsyncHyperResolver,
-    resolver::Resolver
-};
-
-use std::{
-    net::{IpAddr},
+    resolver::Resolver,
 };
 
 #[derive(Clone)]
 pub struct CrawlingRulesOptions {
-    pub ignore_reserved_subnets: bool,
     pub max_redirect: usize,
     pub link_target: LinkTarget,
     pub allow_www: bool,
@@ -37,7 +32,6 @@ pub struct CrawlingRulesOptions {
 impl Default for CrawlingRulesOptions{
     fn default() -> Self {
         Self {
-            ignore_reserved_subnets: true,
             max_redirect: 5,
             link_target: LinkTarget::HeadFollow,
             allow_www: true,
@@ -122,9 +116,6 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
             Box::new(task_filters::SameDomain::new(options.allow_www)),
             Box::new(task_filters::HashSetDedup::new()),
         ];
-        if options.ignore_reserved_subnets {
-            task_filters.push(Box::new(task_filters::IgnoreReservedSubnets::new()));
-        }
         if options.page_budget.is_some() {
             task_filters.push(Box::new(task_filters::TotalPageBudget::new(options.page_budget.unwrap())));
         }
@@ -184,10 +175,7 @@ struct HttpClientFactory<R: Resolver> {
     networking_profile: config::ResolvedNetworkingProfile<R>,
 }
 
-type HttpClient<R> = hyper::Client<HttpConnector<R>>;
-type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<Adaptor<R>>>>;
-
-impl<R: Resolver> HttpClientFactory<R> {
+impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
     fn make(&self) -> (HttpClient<R>, hyper_utils::Stats) {
         let v = self.networking_profile.values.clone();
 
@@ -291,13 +279,13 @@ impl<R: Resolver> Crawler<R> {
 
             let mut processor_handles = vec![];
             for i in 0..job.settings.concurrency {
-                let cf = client_factory.clone();
                 let mut processor = TaskProcessor::new(
                     job.clone(),
                     scheduler.job_update_tx.clone(),
                     scheduler.tasks_rx.clone(),
                     self.parse_tx.clone(),
-                    Box::new(move || cf.make())
+                    Box::new(client_factory.clone()),
+                    Arc::clone(&self.networking_profile.resolver),
                 );
 
                 processor_handles.push(tokio::spawn(async move {

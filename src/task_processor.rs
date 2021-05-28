@@ -1,18 +1,20 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
-use crate::{types::*, status_filters, load_filters, hyper_utils};
+use crate::{types::*, status_filters, load_filters, hyper_utils, resolver::{Resolver, Adaptor as ResolverAdaptor}};
 
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
 use rand::{Rng, thread_rng};
 
-pub(crate) trait LikeHttpConnector: hyper::client::connect::Connect + Clone + Send + Sync + 'static {}
-impl<T: hyper::client::connect::Connect + Clone + Send + Sync + 'static> LikeHttpConnector for T{}
+pub(crate) type HttpClient<R> = hyper::Client<HttpConnector<R>>;
+pub(crate) type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<ResolverAdaptor<R>>>>;
 
-pub(crate) type ClientFactory<C> = Box<dyn Fn() -> (hyper::Client<C>, hyper_utils::Stats) + Send + Sync + 'static>;
+pub(crate) trait ClientFactory<R: Resolver> {
+    fn make(&self) -> (HttpClient<R>, hyper_utils::Stats);
+}
 
-pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> {
+pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
     job: ResolvedJob<JS, TS>,
     status_filters: StatusFilters<JS, TS>,
     load_filters: LoadFilters<JS, TS>,
@@ -21,18 +23,20 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, C: Like
     tx: Sender<JobUpdate<JS, TS>>,
     tasks_rx: Receiver<Arc<Task>>,
     parse_tx: Sender<ParserTask>,
-    client_factory: ClientFactory<C>,
+    client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
+    resolver: Arc<R>
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcessor<JS, TS, C>
+impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS, R>
 {
     pub(crate) fn new(
         job: ResolvedJob<JS, TS>,
         tx: Sender<JobUpdate<JS, TS>>,
         tasks_rx: Receiver<Arc<Task>>,
         parse_tx: Sender<ParserTask>,
-        client_factory: ClientFactory<C>,
-    ) -> TaskProcessor<JS, TS, C> {
+        client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
+        resolver: Arc<R>
+    ) -> TaskProcessor<JS, TS, R> {
         TaskProcessor {
             status_filters: job.rules.status_filters(),
             load_filters: job.rules.load_filters(),
@@ -42,6 +46,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
             tasks_rx,
             parse_tx,
             client_factory,
+            resolver
         }
     }
 
@@ -61,10 +66,32 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         Ok(bytes)
     }
 
+    async fn resolve(
+        &mut self,
+        task: Arc<Task>,
+    ) -> Result<ResolveData> {
+        let t = Instant::now();
+
+        let host = task.link.url.host_str()
+            .with_context(|| format!("cannot get host from {:?}", task.link.url.as_str()))?;
+
+        let res = self.resolver
+            .resolve(host)
+            .await
+            .with_context(|| format!("cannot resolve host {} -> ip", host))?;
+
+        Ok(ResolveData {
+            metrics: ResolveMetrics{
+                resolve_dur: t.elapsed(),
+            },
+            addrs: res.collect()
+        })
+    }
+
     async fn status(
         &mut self,
         task: Arc<Task>,
-        client: &hyper::Client<C>,
+        client: &HttpClient<R>,
         is_head: bool,
     ) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
         let mut status_metrics = StatusMetrics{ wait_dur: task.queued_at.elapsed(), ..Default::default()};
@@ -219,35 +246,39 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
         Ok(follow_data)
     }
 
+    async fn process_task(&mut self, task: Arc<Task>, client: &HttpClient<R>, stats: &hyper_utils::Stats) -> Result<JobProcessing> {
+        let resolve_data = self.resolve(Arc::clone(&task)).await?;
 
-    async fn process_task(&mut self, task: Arc<Task>, client: &hyper::Client<C>, stats: &hyper_utils::Stats) -> StatusData{
-        let mut status = StatusData{
+        let mut status = JobProcessing {
+            resolve_data,
             head_status: StatusResult::None,
             status: StatusResult::None,
             load_data: LoadResult::None,
             follow_data: FollowResult::None,
             links: vec![],
         };
-        if task.link.target == LinkTarget::Head ||
-            task.link.target == LinkTarget::HeadLoad ||
-            task.link.target == LinkTarget::HeadFollow
-        {
+
+        if task.link.target == LinkTarget::JustResolveDNS {
+            return Ok(status)
+        }
+
+        if task.link.target == LinkTarget::Head || task.link.target == LinkTarget::HeadLoad || task.link.target == LinkTarget::HeadFollow {
             let status_r = self.status(Arc::clone(&task), &client, true).await;
             if status_r.is_err() {
                 status.head_status = StatusResult::Err(status_r.err().unwrap());
-                return status;
+                return Ok(status);
             }
             let (head_status, _) = status_r.unwrap();
             status.head_status = StatusResult::Ok(head_status);
         };
         if task.link.target == LinkTarget::Head {
-            return status;
+            return Ok(status);
         }
 
         let status_r = self.status(Arc::clone(&task), &client, false).await;
         if status_r.is_err() {
             status.status = StatusResult::Err(status_r.err().unwrap());
-            return status;
+            return Ok(status);
         }
 
         let (get_status, resp) = status_r.unwrap();
@@ -257,28 +288,28 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
 
         if load_r.is_err() {
             status.load_data = LoadResult::Err(load_r.err().unwrap());
-            return status;
+            return Ok(status);
         }
 
         let (load_data, reader) = load_r.unwrap();
         status.load_data = LoadResult::Ok(load_data);
         if task.link.target == LinkTarget::Load || task.link.target == LinkTarget::HeadLoad {
-            return status;
+            return Ok(status);
         }
 
         let follow_r = self.follow(Arc::clone(&task), get_status, reader).await;
         if follow_r.is_err() {
             status.follow_data = FollowResult::Err(follow_r.err().unwrap());
-            return status;
+            return Ok(status);
         }
         let follow_data = follow_r.unwrap();
         status.follow_data = FollowResult::Ok(follow_data);
-        status
+        Ok(status)
     }
 
     pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
         TracingTask::new(span!(n=n, url=%self.job.url), async move {
-            let (client, mut stats) = (self.client_factory)();
+            let (client, mut stats) = self.client_factory.make();
 
             while let Ok(task) = self.tasks_rx.recv_async().await {
                 if self.tasks_rx.is_disconnected() {
@@ -290,13 +321,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, C: LikeHttpConnector> TaskProcesso
                 stats.reset();
 
                 tokio::select! {
-                    mut status_data = self.process_task(Arc::clone(&task), &client, &stats) => {
+                    mut status_r = self.process_task(Arc::clone(&task), &client, &stats) => {
                         let ctx = self.job.ctx.clone();
-                        status_data.links.extend(self.job.ctx.consume_links());
+                        if let Ok(ref mut status_data) = status_r {
+                            status_data.links.extend(self.job.ctx.consume_links());
+                        }
 
                         let _ = self.tx.send_async(JobUpdate {
                             task,
-                            status: JobStatus::Processing(status_data),
+                            status: JobStatus::Processing(status_r),
                             context: ctx,
                         }).await;
                     }
