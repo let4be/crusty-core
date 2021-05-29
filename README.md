@@ -1,3 +1,5 @@
+![crates.io](https://img.shields.io/crates/v/crusty-core.svg)
+
 # Crusty-core - build your own web crawler!
 
 ### Example - crawl single website, collect information about `TITLE` tags 
