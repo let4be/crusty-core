@@ -2,10 +2,11 @@
 use crate::internal_prelude::*;
 use crate::{types::*, status_filters, load_filters, hyper_utils, resolver::{Resolver, Adaptor as ResolverAdaptor}};
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BufMut, BytesMut, Bytes};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
 use rand::{Rng, thread_rng};
+use std::io::Read;
 
 pub(crate) type HttpClient<R> = hyper::Client<HttpConnector<R>>;
 pub(crate) type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<ResolverAdaptor<R>>>>;
@@ -50,20 +51,26 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         }
     }
 
-    async fn read(&self, body: &mut hyper::Response<hyper::Body>) -> Result<BytesMut> {
+    async fn read(&self, body: &mut hyper::Response<hyper::Body>, encoding: String) -> anyhow::Result<Bytes> {
         let mut bytes = BytesMut::with_capacity(*self.job.settings.internal_read_buffer_size);
 
         while let Some(buf) = body.data().await {
-            let buf = buf.context("")?;
+            let buf = buf.context("error during reading")?;
             if buf.has_remaining() {
                 if bytes.len() + buf.len() > *self.job.settings.max_response_size as usize {
-                    return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size).into());
+                    return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size));
                 }
                 bytes.put(buf);
             }
         }
 
-        Ok(bytes)
+        if encoding.contains("gzip") || encoding.contains("deflate") {
+            let mut buf: Vec<u8> = vec![];
+            let _ = GzDecoder::new(bytes.reader()).read_to_end(&mut buf)?;
+            return Ok(Bytes::from(buf))
+        }
+
+        Ok(bytes.freeze())
     }
 
     async fn resolve(
@@ -159,26 +166,20 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
     ) -> Result<(LoadData, Box<dyn io::Read + Sync + Send>)> {
         let mut load_metrics = LoadMetrics {..Default::default()};
 
-        let body = self.read(&mut resp).await.with_context(|| "cannot read http get response")?;
+        let enc = String::from(resp.headers()
+            .get(http::header::CONTENT_ENCODING)
+            .map_or("",|h| h.to_str().unwrap_or("")));
+
+        let body = self.read(&mut resp, enc).await.with_context(|| "cannot read http get response")?;
 
         load_metrics.read_size = stats.read();
         load_metrics.write_size = stats.write();
-
-        let enc = resp.headers()
-            .get(http::header::CONTENT_ENCODING)
-            .map_or("",|h| h.to_str().unwrap_or(""));
-
-        let reader : Box<dyn io::Read + Sync + Send> = if enc.contains("gzip") || enc.contains("deflate") {
-            Box::new(GzDecoder::new(body.reader()))
-        } else {
-            Box::new(body.reader())
-        };
 
         load_metrics.load_dur = status.started_processing_on.elapsed();
 
         let mut term_by = None;
         for filter in self.load_filters.iter() {
-            let r = filter.accept(&self.job.ctx, &task, &status);
+            let r = filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()));
             match r {
                 load_filters::Action::Term => {
                     term_by = Some(filter.name());
@@ -195,7 +196,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         let load_data = LoadData{
             metrics: load_metrics,
         };
-        Ok((load_data, reader))
+        Ok((load_data, Box::new(body.reader())))
     }
 
     async fn follow(

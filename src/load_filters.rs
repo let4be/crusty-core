@@ -14,5 +14,6 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
         ctx: &rt::JobCtx<JS, TS>,
         task: &rt::Task,
         status: &rt::HttpStatus,
+        reader: Box<dyn io::Read + Sync + Send>
     ) -> Action;
 }
