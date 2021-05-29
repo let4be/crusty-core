@@ -13,7 +13,9 @@ pub struct TaskState {
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
     fn name(&self) -> String {String::from("DataExtractor")}
-    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
+    fn expand(&self,
+              ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document
+    ) -> task_expanders::ExtResult {
         if let Some(title) = doc.find(Name("title")).next().map(|v|v.text()) {
             ctx.task_state.lock().unwrap().title = title.clone();
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
