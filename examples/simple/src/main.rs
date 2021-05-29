@@ -17,14 +17,13 @@ pub struct TaskState {
 }
 
 pub struct DataExtractor {}
+type Ctx = JobCtx<JobState, TaskState>;
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self,
-              ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document
-    ) -> task_expanders::ExtResult {
+    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
         let title = doc.find(Name("title")).next().map(|v|v.text());
         if let Some(title) = title {
-            ctx.task_state.title = title.clone();
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
+            ctx.task_state.title = title;
         }
         Ok(())
     }
