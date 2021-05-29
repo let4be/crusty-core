@@ -7,6 +7,7 @@ pub use tokio::time::{self, Instant, Duration};
 pub use url::Url;
 
 pub use std::{
+    io,
     pin::Pin,
     rc::{Rc},
     cell::{RefCell},

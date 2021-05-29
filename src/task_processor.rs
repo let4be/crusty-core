@@ -156,7 +156,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         status: &HttpStatus,
         stats: &hyper_utils::Stats,
         mut resp: hyper::Response<hyper::Body>,
-    ) -> Result<(LoadData, Box<dyn std::io::Read + Sync + Send>)> {
+    ) -> Result<(LoadData, Box<dyn io::Read + Sync + Send>)> {
         let mut load_metrics = LoadMetrics {..Default::default()};
 
         let body = self.read(&mut resp).await.with_context(|| "cannot read http get response")?;
@@ -164,21 +164,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         load_metrics.read_size = stats.read();
         load_metrics.write_size = stats.write();
 
-        let mut enc = String::from("");
-        let content_encoding_header = resp.headers().get(http::header::CONTENT_ENCODING);
-        if content_encoding_header.is_some() {
-            let s = content_encoding_header.unwrap().to_str();
-            if s.is_ok() {
-                enc = String::from(s.unwrap());
-            }
-        }
+        let enc = resp.headers()
+            .get(http::header::CONTENT_ENCODING)
+            .map_or("",|h| h.to_str().unwrap_or(""));
 
-        let reader;
-        if enc.contains("gzip") || enc.contains("deflate") {
-            reader = Box::new(GzDecoder::new(body.reader())) as Box<dyn std::io::Read + Sync + Send>
+        let reader : Box<dyn io::Read + Sync + Send> = if enc.contains("gzip") || enc.contains("deflate") {
+            Box::new(GzDecoder::new(body.reader()))
         } else {
-            reader = Box::new(body.reader()) as Box<dyn std::io::Read + Sync + Send>
-        }
+            Box::new(body.reader())
+        };
 
         load_metrics.load_dur = status.started_processing_on.elapsed();
 
@@ -208,7 +202,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         &mut self,
         task: Arc<Task>,
         status: HttpStatus,
-        reader: Box<dyn std::io::Read + Sync + Send>,
+        reader: Box<dyn io::Read + Sync + Send>,
     ) -> Result<FollowData> {
         let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
 
