@@ -5,7 +5,9 @@ use crate::types as rt;
 pub type ExtResult = rt::ExtResult<()>;
 
 pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
-    fn name(&self) -> String;
+    fn name(&self) -> String {
+        String::from("no name")
+    }
     fn expand(
         &self,
         ctx: &mut rt::JobCtx<JS, TS>,

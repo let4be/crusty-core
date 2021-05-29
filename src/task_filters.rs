@@ -11,7 +11,9 @@ pub enum Action {
 pub type ExtResult = rt::ExtResult<Action>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
-    fn name(&self) -> String;
+    fn name(&self) -> String {
+        String::from("no name")
+    }
     fn accept(
         &mut self,
         ctx: &mut rt::JobCtx<JS, TS>,
