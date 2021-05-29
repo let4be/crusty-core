@@ -98,7 +98,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                     if let Err(ExtError::Term) = r {
                         return false
                     }
-                    return true
+                    true
                 })
                 .filter_map(|(r, task)| {
                     if let Ok(task_filters::Action::Skip) = r {

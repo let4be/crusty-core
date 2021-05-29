@@ -42,12 +42,11 @@ impl ParserProcessor {
 
                 let wait_time = task.time.elapsed();
                 let t = Instant::now();
-                let payload = task.payload;
-                let res = payload();
+                let res = (task.payload)();
                 let work_time = t.elapsed();
 
                 let _ = task.res_tx.send(ParserResponse {
-                    res,
+                    payload: res,
                     wait_time,
                     work_time
                 });

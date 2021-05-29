@@ -29,7 +29,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Content
         status: &rt::HttpStatus,
     ) -> ExtResult {
         let content_type = status.headers.get(http::header::CONTENT_TYPE)
-            .ok_or(anyhow!("content-type: not found"))?
+            .ok_or_else(||anyhow!("content-type: not found"))?
             .to_str().context("cannot read content-type value")?;
         for accepted in &self.accepted {
             if content_type.contains(accepted) {
@@ -65,7 +65,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
         }
 
         let location = status.headers.get(http::header::LOCATION)
-            .ok_or(anyhow!("location: not found"))?
+            .ok_or_else(||anyhow!("location: not found"))?
             .to_str().context("cannot read location value")?;
 
         let link = rt::Link::new(

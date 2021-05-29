@@ -210,13 +210,18 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
     ) -> Result<FollowData> {
         let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
 
+        let task_state = Arc::new(Mutex::new(Some(TS::default())));
+        let links = Arc::new(Mutex::new(Some(Vec::<Link>::new())));
+
         let payload = {
             let task = Arc::clone(&task);
             let task_expanders = Arc::clone(&self.task_expanders);
-            let mut job_ctx = self.job.ctx.clone();
             let term_on_error = self.term_on_error;
+            let mut job_ctx = self.job.ctx.clone();
+            let task_state = Arc::clone(&task_state);
+            let links = Arc::clone(&links);
 
-            move || -> Result<(FollowData, Vec<Arc<Link>>)> {
+            move || -> Result<FollowData> {
                 let t = Instant::now();
 
                 let document = select::document::Document::from_read(reader).context("cannot read html document")?;
@@ -228,19 +233,29 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
                             return Err(Error::TaskExpanderTerm {name: expander.name()})
                         },
                         Err(ExtError::Other(err)) => {
-                            trace!("error in task expander {}: {:#}", expander.name(), &err);
                             if term_on_error {
                                 return Err(Error::TaskExpanderTermByError {name: expander.name(), source: err})
                             }
+                            trace!("error in task expander {}: {:#}", expander.name(), &err);
                         }
                     }
                 }
 
-                Ok((FollowData{
+                {
+                    let mut links = links.lock().unwrap();
+                    *links = Some(job_ctx._consume_links());
+                }
+
+                {
+                    let mut task_state = task_state.lock().unwrap();
+                    *task_state = Some(job_ctx.task_state);
+                }
+
+                Ok(FollowData{
                     metrics: FollowMetrics{
                         parse_dur: t.elapsed(),
                     },
-                }, job_ctx.consume_links()))
+                })
             }
         };
 
@@ -251,8 +266,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         }).await;
 
         let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
-        let (follow_data, links) = parser_response.res?;
-        self.job.ctx.push_arced_links(links);
+        let follow_data = parser_response.payload?;
+        {
+            let mut task_state = task_state.lock().unwrap();
+            self.job.ctx.task_state = task_state.take().unwrap();
+        }
+        {
+            let mut links = links.lock().unwrap();
+            self.job.ctx.push_links(links.take().unwrap());
+        }
         Ok(follow_data)
     }
 

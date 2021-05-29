@@ -37,11 +37,11 @@ pub struct TaskState {
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
     fn name(&self) -> String {
-        String::from("DataExtractor")
+        String::from("My Fancy Data Extractor With Fancy Name")
     }
     fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, task: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
         let title = doc.find(Name("title")).next().map(|v|v.text()).ok_or(anyhow!("title not found"))?;
-        {ctx.task_state.lock().unwrap().title = title.clone();}
+        ctx.task_state.title = title.clone();
 
         {
             let mut job_state = ctx.job_state.lock().unwrap();

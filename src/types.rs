@@ -253,13 +253,13 @@ pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
 }
 
 pub struct ParserTask {
-    pub payload: Box<dyn FnOnce() -> Result<(FollowData, Vec<Arc<Link>>)> + Send + 'static>,
+    pub payload: Box<dyn FnOnce() -> Result<FollowData> + Send + 'static>,
     pub time: Instant,
     pub res_tx: Sender<ParserResponse>
 }
 
 pub struct ParserResponse {
-    pub res: Result<(FollowData, Vec<Arc<Link>>)>,
+    pub payload: Result<FollowData>,
     pub wait_time: Duration,
     pub work_time: Duration
 }
@@ -279,8 +279,8 @@ pub struct JobCtx<JS, TS> {
     pub started_at : Instant,
     pub root_url : Url,
     pub job_state: Arc<Mutex<JS>>,
-    pub task_state: Arc<Mutex<TS>>,
-    links: Vec<Arc<Link>>,
+    pub task_state: TS,
+    links: Vec<Link>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
@@ -289,7 +289,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
             started_at: Instant::now(),
             root_url,
             job_state: Arc::new(Mutex::new(job_state)),
-            task_state: Arc::new(Mutex::new(task_state)),
+            task_state,
             links: vec![],
         }
     }
@@ -306,14 +306,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
     }
 
     pub fn push_links(&mut self, links: Vec<Link>) {
-        self.links.extend(links.into_iter().map(|link|Arc::new(link)))
-    }
-
-    pub(crate) fn push_arced_links(&mut self, links: Vec<Arc<Link>>) {
-        self.links.extend(links)
+        self.links.extend(links.into_iter())
     }
 
     pub fn consume_links(&mut self) -> Vec<Arc<Link>> {
+        self.links.drain(0..).map(Arc::new).collect()
+    }
+
+    pub(crate) fn _consume_links(&mut self) -> Vec<Link> {
         self.links.drain(0..).collect()
     }
 }
