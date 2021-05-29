@@ -76,7 +76,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
         ).context("cannot create link")?;
 
         ctx.push_links(vec![link]);
-        Err(rt::ExtError::Term)
+        Ok(())
     }
 }
 
