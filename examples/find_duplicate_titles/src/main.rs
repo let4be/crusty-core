@@ -1,6 +1,6 @@
 use crusty_core::prelude::*;
 
-use std::{collections::HashMap, fmt, env};
+use std::{collections::{HashMap, hash_map::Entry}, fmt, env};
 use tracing::{info, Level};
 use tracing_subscriber;
 use anyhow::anyhow;
@@ -36,22 +36,24 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, task: &Task, _: &HttpStatus, doc: &Document) {
-        let title = doc
-            .find(Name("title")).next().map(|v|v.text());
-        if let Some(title) = title {
-            ctx.task_state.lock().unwrap().title = title.clone();
+    fn name(&self) -> String {
+        String::from("DataExtractor")
+    }
+    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, task: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
+        let title = doc.find(Name("title")).next().map(|v|v.text()).ok_or(anyhow!("title not found"))?;
+        {ctx.task_state.lock().unwrap().title = title.clone();}
 
-            {
-                let mut job_state = ctx.job_state.lock().unwrap();
-                let mut urls_with_title = job_state.duplicate_titles.get_mut(&title);
-                if urls_with_title.is_none() {
-                    job_state.duplicate_titles.insert(title.clone(), vec![]);
-                    urls_with_title = job_state.duplicate_titles.get_mut(&title);
+        {
+            let mut job_state = ctx.job_state.lock().unwrap();
+            let urls_with_title = match job_state.duplicate_titles.entry(title) {
+                Entry::Occupied(e) => { e.into_mut() },
+                Entry::Vacant(e) => {
+                    e.insert(vec![])
                 }
-                urls_with_title.unwrap().push(task.link.url.clone());
-            }
+            };
+            urls_with_title.push(task.link.url.clone());
         }
+        Ok(())
     }
 }
 

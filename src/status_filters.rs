@@ -2,122 +2,87 @@
 use crate::internal_prelude::*;
 use crate::types as rt;
 
-pub enum Action {
-    Skip,
-    Term,
-}
+pub type ExtResult = rt::ExtResult<()>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
     fn accept(
         &self,
         ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
         status: &rt::HttpStatus,
-    ) -> Action;
+    ) -> ExtResult;
 }
 
 pub struct ContentType {
     accepted: Vec<String>,
-    term_on_error: bool
 }
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for ContentType {
-    fn name(&self) -> &'static str { "ContentTypeFilter" }
+    name!{}
     fn accept(
         &self,
         _ctx: &mut rt::JobCtx<JS, TS>,
         _task: &rt::Task,
         status: &rt::HttpStatus,
-    ) -> Action {
-        let content_type = status.headers.get(http::header::CONTENT_TYPE);
-        if content_type.is_none() {
-            if self.term_on_error {
-                return Action::Term;
-            }
-            return Action::Skip;
-        }
-        let content_type = content_type.unwrap().to_str();
-        if content_type.is_err() {
-            if self.term_on_error {
-                return Action::Term;
-            }
-            return Action::Skip;
-        }
-        let content_type = content_type.unwrap();
-
-        for ct in &self.accepted {
-            if content_type.contains(ct) {
-                return Action::Skip;
+    ) -> ExtResult {
+        let content_type = status.headers.get(http::header::CONTENT_TYPE)
+            .ok_or(anyhow!("content-type: not found"))?
+            .to_str().context("cannot read content-type value")?;
+        for accepted in &self.accepted {
+            if content_type.contains(accepted) {
+                return Ok(());
             }
         }
-
-        Action::Term
+        Err(rt::ExtError::Term)
     }
 }
 
 impl ContentType {
-    pub fn new(accepted: Vec<String>, term_on_error: bool) -> Self {
-        Self {accepted, term_on_error }
+    struct_name!{}
+    pub fn new(accepted: Vec<String>) -> Self {
+        Self {accepted }
     }
 }
 
+#[derive(Default)]
 pub struct Redirect {
-    term_on_error: bool
 }
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirect {
-    fn name(&self) -> &'static str { "RedirectLoadFilter" }
+    name!{}
     fn accept(
         &self,
         ctx: &mut rt::JobCtx<JS, TS>,
         task: &rt::Task,
         status: &rt::HttpStatus,
-    ) -> Action {
+    ) -> ExtResult {
         let sc = status.status_code;
         if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
-            return Action::Skip;
+            return Ok(());
         }
 
-        let location = status.headers.get(http::header::LOCATION);
-        if location.is_none() {
-            if self.term_on_error {
-                return Action::Term;
-            }
-            return Action::Skip;
-        }
-        let location = location.unwrap().to_str();
-        if location.is_err() {
-            if self.term_on_error {
-                return Action::Term;
-            }
-            return Action::Skip;
-        }
-        let location = location.unwrap();
+        let location = status.headers.get(http::header::LOCATION)
+            .ok_or(anyhow!("location: not found"))?
+            .to_str().context("cannot read location value")?;
 
         let link = rt::Link::new(
             String::from(location),
             String::from(""),
             String::from(""),
             task.link.redirect + 1,
-            task.link.target.clone(),
+            task.link.target,
             &task.link,
-        );
+        ).context("cannot create link")?;
 
-        if link.is_err() {
-            if self.term_on_error {
-                return Action::Term;
-            }
-            return Action::Skip;
-        }
-
-        ctx.push_links(vec![link.unwrap()]);
-        Action::Skip
+        ctx.push_links(vec![link]);
+        Err(rt::ExtError::Term)
     }
 }
 
 impl Redirect {
-    pub fn new(term_on_error: bool) -> Self {
-        Self {term_on_error}
+    struct_name!{}
+    pub fn new() -> Self {
+        Self::default()
     }
 }

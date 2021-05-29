@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
-use crate::{types::*, status_filters, load_filters, hyper_utils, resolver::{Resolver, Adaptor as ResolverAdaptor}};
+use crate::{types::*, hyper_utils, resolver::{Resolver, Adaptor as ResolverAdaptor}};
 
 use bytes::{Buf, BufMut, BytesMut, Bytes};
 use flate2::read::GzDecoder;
@@ -20,6 +20,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Reso
     status_filters: StatusFilters<JS, TS>,
     load_filters: LoadFilters<JS, TS>,
     task_expanders: Arc<TaskExpanders<JS, TS>>,
+    term_on_error: bool,
 
     tx: Sender<JobUpdate<JS, TS>>,
     tasks_rx: Receiver<Arc<Task>>,
@@ -42,6 +43,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
             status_filters: job.rules.status_filters(),
             load_filters: job.rules.load_filters(),
             task_expanders: Arc::new(job.rules.task_expanders()),
+            term_on_error: true,
             job,
             tx,
             tasks_rx,
@@ -119,7 +121,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
         let resp;
         tokio::select! {
-            r = client.request(req.body(hyper::Body::default()).unwrap()) => {
+            r = client.request(req.body(hyper::Body::default()).context("could not construct http request")?) => {
                 resp = r;
             },
             _ = timeout => {
@@ -138,20 +140,20 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
             status_metrics,
         };
 
-        let mut term_by = None;
         for filter in self.status_filters.iter() {
             let r = filter.accept(&mut self.job.ctx, &task, &status);
             match r {
-                status_filters::Action::Term => {
-                    term_by = Some(filter.name());
-                    break
+                Err(ExtError::Term) => {
+                    return Err(Error::StatusFilterTerm {name: filter.name()})
                 },
-                status_filters::Action::Skip => {}
+                Err(ExtError::Other(err)) => {
+                    trace!("error in status filter {}: {:#}", filter.name(), &err);
+                    if self.term_on_error {
+                        return Err(Error::StatusFilterTermByError {name: filter.name(), source: err})
+                    }
+                },
+                Ok(_) => {},
             }
-        }
-
-        if term_by.is_some() {
-            return Err(Error::FilterTerm {name: term_by.unwrap().into()})
         }
 
         Ok((status, resp))
@@ -177,20 +179,20 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
         load_metrics.load_dur = status.started_processing_on.elapsed();
 
-        let mut term_by = None;
         for filter in self.load_filters.iter() {
             let r = filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()));
             match r {
-                load_filters::Action::Term => {
-                    term_by = Some(filter.name());
-                    break
-                }
-                load_filters::Action::Skip => {}
+                Err(ExtError::Term) => {
+                    return Err(Error::LoadFilterTerm {name: filter.name()})
+                },
+                Err(ExtError::Other(err)) => {
+                    trace!("error in status filter {}: {:#}", filter.name(), &err);
+                    if self.term_on_error {
+                        return Err(Error::LoadFilterTermByError {name: filter.name(), source: err})
+                    }
+                },
+                Ok(_) => {},
             }
-        }
-
-        if term_by.is_some() {
-            return Err(Error::FilterTerm {name: term_by.unwrap().into()})
         }
 
         let load_data = LoadData{
@@ -211,14 +213,26 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
             let task = Arc::clone(&task);
             let task_expanders = Arc::clone(&self.task_expanders);
             let mut job_ctx = self.job.ctx.clone();
+            let term_on_error = self.term_on_error;
 
             move || -> Result<(FollowData, Vec<Arc<Link>>)> {
                 let t = Instant::now();
 
                 let document = select::document::Document::from_read(reader).context("cannot read html document")?;
 
-                for h in task_expanders.iter() {
-                    h.expand(&mut job_ctx, &task, &status, &document);
+                for expander in task_expanders.iter() {
+                    match expander.expand(&mut job_ctx, &task, &status, &document) {
+                        Ok(_) => {},
+                        Err(ExtError::Term) => {
+                            return Err(Error::TaskExpanderTerm {name: expander.name()})
+                        },
+                        Err(ExtError::Other(err)) => {
+                            trace!("error in task expander {}: {:#}", expander.name(), &err);
+                            if term_on_error {
+                                return Err(Error::TaskExpanderTermByError {name: expander.name(), source: err})
+                            }
+                        }
+                    }
                 }
 
                 Ok((FollowData{
@@ -258,47 +272,54 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         }
 
         if task.link.target == LinkTarget::Head || task.link.target == LinkTarget::HeadLoad || task.link.target == LinkTarget::HeadFollow {
-            let status_r = self.status(Arc::clone(&task), &client, true).await;
-            if status_r.is_err() {
-                status.head_status = StatusResult::Err(status_r.err().unwrap());
-                return Ok(status);
+            match self.status(Arc::clone(&task), &client, true).await {
+                Ok((head_status, _)) => {
+                    status.head_status = StatusResult::Ok(head_status);
+                }
+                Err(err) => {
+                    status.head_status = StatusResult::Err(err);
+                    return Ok(status);
+                }
             }
-            let (head_status, _) = status_r.unwrap();
-            status.head_status = StatusResult::Ok(head_status);
         };
         if task.link.target == LinkTarget::Head {
             return Ok(status);
         }
 
-        let status_r = self.status(Arc::clone(&task), &client, false).await;
-        if status_r.is_err() {
-            status.status = StatusResult::Err(status_r.err().unwrap());
-            return Ok(status);
-        }
-
-        let (get_status, resp) = status_r.unwrap();
+        let (get_status, resp) = match self.status(Arc::clone(&task), &client, false).await{
+            Err(err) => {
+                status.status = StatusResult::Err(err);
+                return Ok(status);
+            },
+            Ok((get_status, resp)) => (get_status, resp)
+        };
 
         let load_r = self.load(Arc::clone(&task), &get_status, stats, resp).await;
         status.status = StatusResult::Ok(get_status.clone());
 
-        if load_r.is_err() {
-            status.load_data = LoadResult::Err(load_r.err().unwrap());
-            return Ok(status);
-        }
+        let reader= match load_r {
+            Err(err) => {
+                status.load_data = LoadResult::Err(err);
+                return Ok(status);
+            }
+            Ok((load_data, reader)) => {
+                status.load_data = LoadResult::Ok(load_data);
+                reader
+            }
+        };
 
-        let (load_data, reader) = load_r.unwrap();
-        status.load_data = LoadResult::Ok(load_data);
         if task.link.target == LinkTarget::Load || task.link.target == LinkTarget::HeadLoad {
             return Ok(status);
         }
 
-        let follow_r = self.follow(Arc::clone(&task), get_status, reader).await;
-        if follow_r.is_err() {
-            status.follow_data = FollowResult::Err(follow_r.err().unwrap());
-            return Ok(status);
+        match self.follow(Arc::clone(&task), get_status, reader).await {
+            Ok(follow_data) => {
+                status.follow_data = FollowResult::Ok(follow_data);
+            },
+            Err(err) => {
+                status.follow_data = FollowResult::Err(err);
+            }
         }
-        let follow_data = follow_r.unwrap();
-        status.follow_data = FollowResult::Ok(follow_data);
         Ok(status)
     }
 

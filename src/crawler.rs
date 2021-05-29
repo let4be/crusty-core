@@ -26,7 +26,6 @@ pub struct CrawlingRulesOptions {
     pub links_per_page_budget: Option<usize>,
     pub max_level: Option<usize>,
     pub accepted_content_types: Option<Vec<String>>,
-    pub redirect_term_on_err: Option<bool>
 }
 
 impl Default for CrawlingRulesOptions{
@@ -39,7 +38,6 @@ impl Default for CrawlingRulesOptions{
             links_per_page_budget: Some(50),
             max_level: Some(10),
             accepted_content_types: Some(vec![String::from("text/html")]),
-            redirect_term_on_err: Some(true),
         }
     }
 }
@@ -120,14 +118,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
             ),
             Box::new(task_filters::HashSetDedup::new()),
         ];
-        if options.page_budget.is_some() {
-            task_filters.push(Box::new(task_filters::TotalPageBudget::new(options.page_budget.unwrap())));
+        if let Some(page_budget) = options.page_budget {
+            task_filters.push(Box::new(task_filters::TotalPageBudget::new(page_budget)));
         }
-        if options.links_per_page_budget.is_some() {
-            task_filters.push(Box::new(task_filters::LinkPerPageBudget::new(options.links_per_page_budget.unwrap())))
+        if let Some(links_per_page_budget) = options.links_per_page_budget {
+            task_filters.push(Box::new(task_filters::LinkPerPageBudget::new(links_per_page_budget)))
         }
-        if options.max_level.is_some() {
-            task_filters.push(Box::new(task_filters::PageLevel::new(options.max_level.unwrap())))
+        if let Some(max_level) = options.max_level {
+            task_filters.push(Box::new(task_filters::PageLevel::new(max_level)))
         }
 
         for e in &self.custom_task_filter {
@@ -139,12 +137,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
     fn status_filters(&self) -> StatusFilters<JS, TS> {
         let options = &self.options;
 
-        let mut status_filters: StatusFilters<JS, TS> = vec![];
-        if options.accepted_content_types.is_some() {
-            status_filters.push(Box::new(status_filters::ContentType::new(options.accepted_content_types.clone().unwrap(), true)));
-        }
-        if options.redirect_term_on_err.is_some() {
-            status_filters.push(Box::new(status_filters::Redirect::new(true)));
+        let mut status_filters: StatusFilters<JS, TS> = vec![
+            Box::new(status_filters::Redirect::new())
+        ];
+        if let Some(v) = &options.accepted_content_types {
+            status_filters.push(Box::new(status_filters::ContentType::new(v.clone())));
         }
 
         for e in &self.custom_status_filters {
@@ -164,7 +161,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 
     fn task_expanders(&self) -> TaskExpanders<JS, TS> {
         let mut task_expanders : TaskExpanders<JS, TS> = vec![
-            Box::new(task_expanders::FollowLinks::new(self.options.link_target.clone())),
+            Box::new(task_expanders::FollowLinks::new(self.options.link_target)),
         ];
 
         for e in &self.custom_task_expanders {

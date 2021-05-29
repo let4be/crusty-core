@@ -48,34 +48,37 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
         }
     }
 
-    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Action {
+    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::ExtResult {
         let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
         let _span = span!(task = %task).entered();
         for filter in &mut self.task_filters {
             match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
-                task_filters::Action::Accept => continue,
-                task_filters::Action::Skip => {
+                Ok(task_filters::Action::Accept) => continue,
+                Ok(task_filters::Action::Skip) => {
                     if task.is_root() {
-                        warn!(action = "skip", filter_name = filter.name(), action);
+                        warn!(action = "skip", filter_name = %filter.name(), action);
                     } else {
-                        trace!(action = "skip", filter_name = filter.name(), action);
+                        trace!(action = "skip", filter_name = %filter.name(), action);
                     }
-                    return task_filters::Action::Skip
+                    return Ok(task_filters::Action::Skip)
                 },
-                task_filters::Action::Term => {
+                Err(ExtError::Term) => {
                     if task.is_root() {
-                        warn!(action = "term", filter_name = filter.name(), action);
+                        warn!(action = "term", filter_name = %filter.name(), action);
                     } else {
-                        trace!(action = "term", filter_name = filter.name(), action);
+                        trace!(action = "term", filter_name = %filter.name(), action);
                     }
-                    return task_filters::Action::Term
+                    return Err(ExtError::Term)
                 },
+                Err(ExtError::Other(_)) => {
+                    continue
+                }
             }
         }
 
         trace!(action = "scheduled", action);
-        task_filters::Action::Accept
+        Ok(task_filters::Action::Accept)
     }
 
     async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
@@ -91,10 +94,13 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                     (self.schedule_filter(&mut task), task)
                 })
                 .take_while(|(r, _)|{
-                    *r != task_filters::Action::Term
+                    if let Err(ExtError::Term) = r {
+                        return false
+                    }
+                    return true
                 })
                 .filter_map(|(r, task)| {
-                    if r == task_filters::Action::Skip {
+                    if let Ok(task_filters::Action::Skip) = r {
                         return None
                     }
                     Some(task)
@@ -119,9 +125,9 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                 "Starting..."
             );
 
-            let is_accepted = self.schedule_filter(&mut root_task) == task_filters::Action::Accept;
+            let r = self.schedule_filter(&mut root_task);
             let root_task = Arc::new(root_task);
-            if is_accepted {
+            if let Ok(task_filters::Action::Accept) = r {
                 self.schedule(Arc::clone(&root_task));
             }
 

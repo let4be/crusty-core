@@ -1,7 +1,6 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
-pub use select;
-pub use flume;
+
 use crate::{
     task_filters,
     status_filters,
@@ -75,13 +74,48 @@ pub enum Error {
     Other(#[from] anyhow::Error),
     #[error("timeout during loading")]
     LoadTimeout,
-    #[error("terminated by filter {name:?}")]
-    FilterTerm{
+    #[error("terminated by status filter {name:?}")]
+    StatusFilterTerm {
         name: String
-    }
+    },
+    #[error("terminated by error in status filter(term_by_error=true) {name:?}")]
+    StatusFilterTermByError {
+        name: String,
+        #[source]
+        source: anyhow::Error
+    },
+    #[error("terminated by load filter {name:?}")]
+    LoadFilterTerm {
+        name: String
+    },
+    #[error("terminated by error in load filter(term_by_error=true) {name:?}")]
+    LoadFilterTermByError {
+        name: String,
+        #[source]
+        source: anyhow::Error
+    },
+    #[error("terminated by task expander {name:?}")]
+    TaskExpanderTerm {
+        name: String
+    },
+    #[error("terminated by error in task expander(term_by_error=true) {name:?}")]
+    TaskExpanderTermByError {
+        name: String,
+        #[source]
+        source: anyhow::Error
+    },
 }
 
 pub type Result<T> = anyhow::Result<T, Error>;
+
+#[derive(Error, Debug)]
+pub enum ExtError {
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+    #[error("terminated")]
+    Term,
+}
+pub type ExtResult<T> = std::result::Result<T, ExtError>;
 
 #[derive(Error, Debug)]
 pub enum JobError {
@@ -91,7 +125,7 @@ pub enum JobError {
     JobFinishedByHardTimeout,
 }
 
-#[derive(Clone, PartialEq, Debug )]
+#[derive(Clone, PartialEq, Debug, Copy )]
 pub enum LinkTarget {
     JustResolveDNS = 0,
     Head = 1,
