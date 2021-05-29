@@ -9,96 +9,98 @@ use crusty_core::prelude::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct JobState {
-    sum_title_len: usize
+  sum_title_len: usize
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct TaskState {
-    title: String
+  title: String
 }
 
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) {
-        let title = doc.find(Name("title")).next().map(|v|v.text());
-        if let Some(title) = title {
-            ctx.task_state.lock().unwrap().title = title.clone();
-            ctx.job_state.lock().unwrap().sum_title_len += title.len();
-        }
+  fn name(&self) -> String {String::from("DataExtractor")}
+  fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
+    if let Some(title) = doc.find(Name("title")).next().map(|v|v.text()) {
+      ctx.task_state.lock().unwrap().title = title.clone();
+      ctx.job_state.lock().unwrap().sum_title_len += title.len();
     }
+    Ok(())
+  }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let crawler = Crawler::new_default()?;
+  let crawler = Crawler::new_default()?;
 
-    let settings = config::CrawlingSettings::default();
-    let rules = CrawlingRules::default().with_task_expander(|| DataExtractor{} );
+  let settings = config::CrawlingSettings::default();
+  let rules = CrawlingRules::default().with_task_expander(|| DataExtractor{} );
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
-    for r in crawler.iter(job) {
-        println!("- {}, task state: {:?}", r, r.context.task_state);
-        if let JobStatus::Finished(_) = r.status {
-            println!("final job state: {:?}", r.context.job_state.lock().unwrap());
-        }
+  let job = Job::new("https://example.com", settings, rules, JobState::default())?;
+  for r in crawler.iter(job) {
+    println!("- {}, task state: {:?}", r, r.context.task_state);
+    if let JobStatus::Finished(_) = r.status {
+      println!("final job state: {:?}", r.context.job_state.lock().unwrap());
     }
-    Ok(())
+  }
+  Ok(())
 }
 ```
 
 If you want to get more fancy and configure some stuff or control your imports more precisely
 ```rust
 use crusty_core::{
-    ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, TaskExpander,
-    types::{
-        Job, JobCtx, Task, HttpStatus, JobStatus,
-        select::predicate::Name, select::document::Document
-    },
-    config,
+  task_expanders,
+  ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, TaskExpander,
+  types::{Job, JobCtx, Task, HttpStatus, JobStatus},
+  config,
+  select::predicate::Name, select::document::Document,
 };
 
 #[derive(Debug, Clone, Default)]
 pub struct JobState {
-    sum_title_len: usize
+  sum_title_len: usize
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct TaskState {
-    title: String
+  title: String
 }
 
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) {
-        let title = doc.find(Name("title")).next().map(|v|v.text());
-        if let Some(title) = title {
-            ctx.task_state.lock().unwrap().title = title.clone();
-            ctx.job_state.lock().unwrap().sum_title_len += title.len();
-        }
+  fn name(&self) -> String { String::from("DataExtractor") }
+  fn expand(&self, ctx: &mut JobCtx<JobState, TaskState>, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
+    let title = doc.find(Name("title")).next().map(|v|v.text());
+    if let Some(title) = title {
+      ctx.task_state.lock().unwrap().title = title.clone();
+      ctx.job_state.lock().unwrap().sum_title_len += title.len();
     }
+    Ok(())
+  }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let concurrency_profile = config::ConcurrencyProfile::default();
-    let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+  let concurrency_profile = config::ConcurrencyProfile::default();
+  let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
-    let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, &pp);
+  let networking_profile = config::NetworkingProfile::default().resolve()?;
+  let crawler = Crawler::new(networking_profile, &pp);
 
-    let settings = config::CrawlingSettings::default();
-    let rules_opt = CrawlingRulesOptions::default();
-    let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
+  let settings = config::CrawlingSettings::default();
+  let rules_opt = CrawlingRulesOptions::default();
+  let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
-    for r in crawler.iter(job) {
-        println!("- {}, task state: {:?}", r, r.context.task_state);
-        if let JobStatus::Finished(_) = r.status {
-            println!("final job state: {:?}", r.context.job_state.lock().unwrap());
-        }
+  let job = Job::new("https://example.com", settings, rules, JobState::default())?;
+  for r in crawler.iter(job) {
+    println!("- {}, task state: {:?}", r, r.context.task_state);
+    if let JobStatus::Finished(_) = r.status {
+      println!("final job state: {:?}", r.context.job_state.lock().unwrap());
     }
+  }
 
-    Ok(pp.join().await??)
+  Ok(pp.join().await??)
 }
 ```
 

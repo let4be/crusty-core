@@ -71,7 +71,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
                     }
                     return Err(ExtError::Term)
                 },
-                Err(ExtError::Other(_)) => {
+                Err(ExtError::Other(err)) => {
+                    trace!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
                     continue
                 }
             }

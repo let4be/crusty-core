@@ -287,6 +287,7 @@ impl<R: Resolver> Crawler<R> {
                     self.parse_tx.clone(),
                     Box::new(client_factory.clone()),
                     Arc::clone(&self.networking_profile.resolver),
+                    true
                 );
 
                 processor_handles.push(tokio::spawn(async move {

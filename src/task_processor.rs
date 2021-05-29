@@ -37,13 +37,14 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
         tasks_rx: Receiver<Arc<Task>>,
         parse_tx: Sender<ParserTask>,
         client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
-        resolver: Arc<R>
+        resolver: Arc<R>,
+        term_on_error: bool
     ) -> TaskProcessor<JS, TS, R> {
         TaskProcessor {
             status_filters: job.rules.status_filters(),
             load_filters: job.rules.load_filters(),
             task_expanders: Arc::new(job.rules.task_expanders()),
-            term_on_error: true,
+            term_on_error,
             job,
             tx,
             tasks_rx,
