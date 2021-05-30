@@ -217,6 +217,8 @@ pub struct CrawlingSettings {
 	pub job_soft_timeout:          CDuration,
 	pub job_hard_timeout:          CDuration,
 	pub custom_headers:            HashMap<String, Vec<String>>,
+	pub user_agent:                Option<String>,
+	pub accept_encoding:           bool,
 }
 
 impl fmt::Display for CrawlingSettings {
@@ -231,7 +233,7 @@ impl fmt::Display for CrawlingSettings {
 
 impl Default for CrawlingSettings {
 	fn default() -> Self {
-		Self {
+		let mut s = Self {
 			concurrency:               2,
 			internal_read_buffer_size: CBytes(32 * 1024),
 			delay:                     CDuration::from_secs(1),
@@ -239,18 +241,23 @@ impl Default for CrawlingSettings {
 			job_hard_timeout:          CDuration::from_secs(60),
 			job_soft_timeout:          CDuration::from_secs(30),
 			load_timeout:              CDuration::from_secs(10),
-			custom_headers:            [
-				(http::header::USER_AGENT.to_string(), vec!["Crusty-core Web Crawler".into()]),
-				(
-					http::header::ACCEPT.to_string(),
-					vec!["text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9".into()],
-				),
-				(http::header::ACCEPT_ENCODING.to_string(), vec!["gzip, deflate".into()]),
-			]
-			.iter()
-			.cloned()
-			.collect(),
+			user_agent:                Some(String::from("crusty-core/0.7.0")),
+			accept_encoding:           true,
+			custom_headers:            HashMap::new(),
 			max_response_size:         CBytes(1024 * 1024 * 2),
+		};
+
+		if let Some(user_agent) = &s.user_agent {
+			s.custom_headers.insert(http::header::USER_AGENT.to_string(), vec![user_agent.clone()]);
 		}
+		if s.accept_encoding {
+			s.custom_headers.insert(http::header::ACCEPT_ENCODING.to_string(), vec!["gzip, deflate".into()]);
+		}
+		s.custom_headers.insert(
+			http::header::ACCEPT.to_string(),
+			vec!["text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9".into()],
+		);
+
+		s
 	}
 }
