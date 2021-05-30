@@ -273,7 +273,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			return Ok(status)
 		}
 
-		status.follow_data = self.follow(Arc::clone(&task), get_status, reader).await.map(|follow_data| FollowResult::Ok(follow_data)).unwrap_or_else(|err| FollowResult::Err(err));
+		status.follow_data = self.follow(Arc::clone(&task), get_status, reader).await.map(FollowResult::Ok).unwrap_or_else(FollowResult::Err);
 
 		Ok(status)
 	}
