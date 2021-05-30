@@ -1,171 +1,147 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
-use crate::{types::*, task_filters};
+use crate::{task_filters, types::*};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
-    job: ResolvedJob<JS, TS>,
-    task_filters: TaskFilters<JS, TS>,
+	job:          ResolvedJob<JS, TS>,
+	task_filters: TaskFilters<JS, TS>,
 
-    task_seq_num: usize,
-    pages_pending: usize,
+	task_seq_num:  usize,
+	pages_pending: usize,
 
-    tasks_tx: Sender<Arc<Task>>,
-    pub(crate) tasks_rx: Receiver<Arc<Task>>,
-    pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
-    job_update_rx: Receiver<JobUpdate<JS, TS>>,
-    update_tx: Sender<JobUpdate<JS, TS>>,
+	tasks_tx:                 Sender<Arc<Task>>,
+	pub(crate) tasks_rx:      Receiver<Arc<Task>>,
+	pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
+	job_update_rx:            Receiver<JobUpdate<JS, TS>>,
+	update_tx:                Sender<JobUpdate<JS, TS>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
-    pub(crate) fn new(
-        job: ResolvedJob<JS, TS>,
-        update_tx: Sender<JobUpdate<JS, TS>>
-    ) -> TaskScheduler<JS, TS> {
-        let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
-        let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
+	pub(crate) fn new(job: ResolvedJob<JS, TS>, update_tx: Sender<JobUpdate<JS, TS>>) -> TaskScheduler<JS, TS> {
+		let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
+		let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
 
-        TaskScheduler {
-            task_filters: job.rules.task_filters(),
-            job,
+		TaskScheduler { task_filters: job.rules.task_filters(), job, task_seq_num: 0, pages_pending: 0, tasks_tx, tasks_rx, job_update_tx, job_update_rx, update_tx }
+	}
 
-            task_seq_num: 0,
-            pages_pending: 0,
+	fn schedule(&mut self, task: Arc<Task>) {
+		self.pages_pending += 1;
 
-            tasks_tx,
-            tasks_rx,
-            job_update_tx,
-            job_update_rx,
-            update_tx,
-        }
-    }
+		let r = self.tasks_tx.send(task);
+		if r.is_err() {
+			panic!("cannot send task to tasks_tx! should never ever happen!")
+		}
+	}
 
-    fn schedule(&mut self, task: Arc<Task>) {
-        self.pages_pending += 1;
+	fn schedule_filter(&mut self, task: &mut Task) -> task_filters::ExtResult {
+		let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
-        let r = self.tasks_tx.send(task);
-        if r.is_err() {
-            panic!("cannot send task to tasks_tx! should never ever happen!")
-        }
-    }
+		let _span = span!(task = %task).entered();
+		for filter in &mut self.task_filters {
+			match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
+				Ok(task_filters::Action::Accept) => continue,
+				Ok(task_filters::Action::Skip) => {
+					if task.is_root() {
+						warn!(action = "skip", filter_name = %filter.name(), action);
+					} else {
+						trace!(action = "skip", filter_name = %filter.name(), action);
+					}
+					return Ok(task_filters::Action::Skip)
+				}
+				Err(ExtError::Term) => {
+					if task.is_root() {
+						warn!(action = "term", filter_name = %filter.name(), action);
+					} else {
+						trace!(action = "term", filter_name = %filter.name(), action);
+					}
+					return Err(ExtError::Term)
+				}
+				Err(ExtError::Other(err)) => {
+					trace!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
+					continue
+				}
+			}
+		}
 
-    fn schedule_filter(&mut self, task: &mut Task) -> task_filters::ExtResult {
-        let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
+		trace!(action = "scheduled", action);
+		Ok(task_filters::Action::Accept)
+	}
 
-        let _span = span!(task = %task).entered();
-        for filter in &mut self.task_filters {
-            match filter.accept(&mut self.job.ctx, self.task_seq_num, task) {
-                Ok(task_filters::Action::Accept) => continue,
-                Ok(task_filters::Action::Skip) => {
-                    if task.is_root() {
-                        warn!(action = "skip", filter_name = %filter.name(), action);
-                    } else {
-                        trace!(action = "skip", filter_name = %filter.name(), action);
-                    }
-                    return Ok(task_filters::Action::Skip)
-                },
-                Err(ExtError::Term) => {
-                    if task.is_root() {
-                        warn!(action = "term", filter_name = %filter.name(), action);
-                    } else {
-                        trace!(action = "term", filter_name = %filter.name(), action);
-                    }
-                    return Err(ExtError::Term)
-                },
-                Err(ExtError::Other(err)) => {
-                    trace!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
-                    continue
-                }
-            }
-        }
+	async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
+		self.pages_pending -= 1;
+		self.task_seq_num += 1;
 
-        trace!(action = "scheduled", action);
-        Ok(task_filters::Action::Accept)
-    }
+		if let (JobStatus::Processing(Ok(ref r)), false) = (&task_response.status, ignore_links) {
+			let tasks: Vec<_> = r
+				.links
+				.iter()
+				.filter_map(|link| Task::new(Arc::clone(link), &task_response.task).ok())
+				.map(|mut task| (self.schedule_filter(&mut task), task))
+				.take_while(|(r, _)| {
+					if let Err(ExtError::Term) = r {
+						return false
+					}
+					true
+				})
+				.filter_map(|(r, task)| {
+					if let Ok(task_filters::Action::Skip) = r {
+						return None
+					}
+					Some(task)
+				})
+				.collect();
 
-    async fn process_task_response(&mut self, task_response: JobUpdate<JS, TS>, ignore_links: bool) {
-        self.pages_pending -= 1;
-        self.task_seq_num += 1;
+			for task in tasks {
+				self.schedule(Arc::new(task));
+			}
+		}
 
-        if let (JobStatus::Processing(Ok(ref r)), false) = (&task_response.status, ignore_links) {
-            let tasks :Vec<_> = r.links.iter()
-                .filter_map(|link| {
-                    Task::new(Arc::clone(link), &task_response.task).ok()
-                })
-                .map(|mut task| {
-                    (self.schedule_filter(&mut task), task)
-                })
-                .take_while(|(r, _)|{
-                    if let Err(ExtError::Term) = r {
-                        return false
-                    }
-                    true
-                })
-                .filter_map(|(r, task)| {
-                    if let Ok(task_filters::Action::Skip) = r {
-                        return None
-                    }
-                    Some(task)
-                })
-                .collect();
+		let _ = self.update_tx.send_async(task_response).await;
+	}
 
-            for task in tasks {
-                self.schedule(Arc::new(task));
-            }
-        }
+	pub(crate) fn go<'a>(mut self) -> Result<PinnedTask<'a, JobUpdate<JS, TS>>> {
+		let mut root_task = Task::new_root(&self.job.url)?;
 
-        let _ = self.update_tx.send_async(task_response).await;
-    }
+		Ok(TracingTask::new(span!(url = %self.job.url), async move {
+			trace!(soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32, hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32, "Starting...");
 
-    pub(crate) fn go<'a>(mut self) -> Result<PinnedTask<'a, JobUpdate<JS, TS>>> {
-        let mut root_task = Task::new_root(&self.job.url)?;
+			let r = self.schedule_filter(&mut root_task);
+			let root_task = Arc::new(root_task);
+			if let Ok(task_filters::Action::Accept) = r {
+				self.schedule(Arc::clone(&root_task));
+			}
 
-        Ok(TracingTask::new(span!(url = %self.job.url), async move {
-            trace!(
-                soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32,
-                hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32,
-                "Starting..."
-            );
+			let mut is_soft_timeout = false;
+			let mut is_hard_timeout = false;
+			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_soft_timeout);
 
-            let r = self.schedule_filter(&mut root_task);
-            let root_task = Arc::new(root_task);
-            if let Ok(task_filters::Action::Accept) = r {
-                self.schedule(Arc::clone(&root_task));
-            }
+			while self.pages_pending > 0 {
+				tokio::select! {
+					res = self.job_update_rx.recv_async() => {
+						self.process_task_response(res.unwrap(), is_soft_timeout).await;
+					}
 
-            let mut is_soft_timeout = false;
-            let mut is_hard_timeout = false;
-            let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_soft_timeout);
+					_ = &mut timeout => {
+						if is_soft_timeout {
+							is_hard_timeout = true;
+							break
+						}
+						is_soft_timeout = true;
+						timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
+					}
+				}
+			}
 
-            while self.pages_pending > 0 {
-                tokio::select! {
-                    res = self.job_update_rx.recv_async() => {
-                        self.process_task_response(res.unwrap(), is_soft_timeout).await;
-                    }
-
-                    _ = &mut timeout => {
-                        if is_soft_timeout {
-                            is_hard_timeout = true;
-                            break
-                        }
-                        is_soft_timeout = true;
-                        timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
-                    }
-                }
-            }
-
-            trace!("Finishing..., pages remaining = {}", self.pages_pending);
-            let res = if is_hard_timeout {
-                Err(JobError::JobFinishedByHardTimeout)
-            } else if is_soft_timeout {
-                Err(JobError::JobFinishedBySoftTimeout)
-            } else {
-                Ok(JobFinished {})
-            };
-            Ok(JobUpdate {
-                task: root_task,
-                status: JobStatus::Finished(res),
-                context: self.job.ctx,
-            })
-        }).instrument())
-    }
+			trace!("Finishing..., pages remaining = {}", self.pages_pending);
+			let res = if is_hard_timeout {
+				Err(JobError::JobFinishedByHardTimeout)
+			} else if is_soft_timeout {
+				Err(JobError::JobFinishedBySoftTimeout)
+			} else {
+				Ok(JobFinished {})
+			};
+			Ok(JobUpdate { task: root_task, status: JobStatus::Finished(res), context: self.job.ctx })
+		})
+		.instrument())
+	}
 }
