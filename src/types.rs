@@ -42,7 +42,9 @@ pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
 
 impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
 	fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
-		ResolvedJob { url: job.url.clone(), settings: job.settings, rules: Arc::new(job.rules), ctx: JobCtx::new(job.url, job.job_state, TS::default()) }
+		let mut r = ResolvedJob { url: job.url.clone(), settings: job.settings, rules: Arc::new(job.rules), ctx: JobCtx::new(job.url, job.job_state, TS::default()) };
+		r.settings.build();
+		r
 	}
 }
 

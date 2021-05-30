@@ -233,7 +233,7 @@ impl fmt::Display for CrawlingSettings {
 
 impl Default for CrawlingSettings {
 	fn default() -> Self {
-		let mut s = Self {
+		Self {
 			concurrency:               2,
 			internal_read_buffer_size: CBytes(32 * 1024),
 			delay:                     CDuration::from_secs(1),
@@ -245,19 +245,21 @@ impl Default for CrawlingSettings {
 			compression:               true,
 			custom_headers:            HashMap::new(),
 			max_response_size:         CBytes(1024 * 1024 * 2),
-		};
+		}
+	}
+}
 
-		if let Some(user_agent) = &s.user_agent {
-			s.custom_headers.insert(http::header::USER_AGENT.to_string(), vec![user_agent.clone()]);
+impl CrawlingSettings {
+	pub fn build(&mut self) {
+		if let Some(user_agent) = &self.user_agent {
+			self.custom_headers.insert(http::header::USER_AGENT.to_string(), vec![user_agent.clone()]);
 		}
-		if s.compression {
-			s.custom_headers.insert(http::header::ACCEPT_ENCODING.to_string(), vec!["gzip, deflate".into()]);
+		if self.compression {
+			self.custom_headers.insert(http::header::ACCEPT_ENCODING.to_string(), vec!["gzip, deflate".into()]);
 		}
-		s.custom_headers.insert(
+		self.custom_headers.insert(
 			http::header::ACCEPT.to_string(),
 			vec!["text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9".into()],
 		);
-
-		s
 	}
 }
