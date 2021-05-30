@@ -218,7 +218,7 @@ pub struct CrawlingSettings {
 	pub job_hard_timeout:          CDuration,
 	pub custom_headers:            HashMap<String, Vec<String>>,
 	pub user_agent:                Option<String>,
-	pub accept_encoding:           bool,
+	pub compression:               bool,
 }
 
 impl fmt::Display for CrawlingSettings {
@@ -242,7 +242,7 @@ impl Default for CrawlingSettings {
 			job_soft_timeout:          CDuration::from_secs(30),
 			load_timeout:              CDuration::from_secs(10),
 			user_agent:                Some(String::from("crusty-core/0.9.0")),
-			accept_encoding:           true,
+			compression:               true,
 			custom_headers:            HashMap::new(),
 			max_response_size:         CBytes(1024 * 1024 * 2),
 		};
@@ -250,7 +250,7 @@ impl Default for CrawlingSettings {
 		if let Some(user_agent) = &s.user_agent {
 			s.custom_headers.insert(http::header::USER_AGENT.to_string(), vec![user_agent.clone()]);
 		}
-		if s.accept_encoding {
+		if s.compression {
 			s.custom_headers.insert(http::header::ACCEPT_ENCODING.to_string(), vec!["gzip, deflate".into()]);
 		}
 		s.custom_headers.insert(
