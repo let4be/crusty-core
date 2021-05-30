@@ -100,8 +100,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		let mut req = hyper::Request::builder();
 		req = req.uri(uri).method(if is_head { hyper::Method::HEAD } else { hyper::Method::GET });
 
-		for (n, v) in &self.job.settings.custom_headers {
-			req = req.header(n, v[0].clone());
+		for (n, vs) in &self.job.settings.custom_headers {
+			for v in vs {
+				req = req.header(n, v);
+			}
 		}
 
 		let timeout = time::sleep(*self.job.settings.load_timeout);
