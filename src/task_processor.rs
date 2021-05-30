@@ -106,17 +106,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			}
 		}
 
-		let timeout = time::sleep(*self.job.settings.load_timeout);
-
-		let resp;
-		tokio::select! {
-			r = client.request(req.body(hyper::Body::default()).context("could not construct http request")?) => {
-				resp = r;
-			},
-			_ = timeout => {
-				return Err(Error::LoadTimeout)
-			}
-		}
+		let req_fut = client.request(req.body(hyper::Body::default()).context("could not construct http request")?);
+		let resp = match timeout(*self.job.settings.load_timeout, req_fut).await {
+			Err(_) => return Err(Error::LoadTimeout),
+			Ok(r) => r,
+		};
 
 		let resp = resp.with_context(|| "cannot make http get")?;
 		status_metrics.status_dur = t.elapsed();
