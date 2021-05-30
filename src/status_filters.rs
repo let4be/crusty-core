@@ -19,7 +19,12 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Content
 	name! {}
 
 	fn accept(&self, _ctx: &mut rt::JobCtx<JS, TS>, _task: &rt::Task, status: &rt::HttpStatus) -> ExtResult {
-		let content_type = status.headers.get(http::header::CONTENT_TYPE).ok_or_else(|| anyhow!("content-type: not found"))?.to_str().context("cannot read content-type value")?;
+		let content_type = status
+			.headers
+			.get(http::header::CONTENT_TYPE)
+			.ok_or_else(|| anyhow!("content-type: not found"))?
+			.to_str()
+			.context("cannot read content-type value")?;
 		for accepted in &self.accepted {
 			if content_type.contains(accepted) {
 				return Ok(())
@@ -49,9 +54,22 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 			return Ok(())
 		}
 
-		let location = status.headers.get(http::header::LOCATION).ok_or_else(|| anyhow!("location: not found"))?.to_str().context("cannot read location value")?;
+		let location = status
+			.headers
+			.get(http::header::LOCATION)
+			.ok_or_else(|| anyhow!("location: not found"))?
+			.to_str()
+			.context("cannot read location value")?;
 
-		let link = rt::Link::new(String::from(location), String::from(""), String::from(""), task.link.redirect + 1, task.link.target, &task.link).context("cannot create link")?;
+		let link = rt::Link::new(
+			String::from(location),
+			String::from(""),
+			String::from(""),
+			task.link.redirect + 1,
+			task.link.target,
+			&task.link,
+		)
+		.context("cannot create link")?;
 
 		ctx.push_links(vec![link]);
 		Ok(())

@@ -19,6 +19,7 @@ pub struct CrawlingRulesOptions {
 	pub links_per_page_budget:  Option<usize>,
 	pub max_level:              Option<usize>,
 	pub accepted_content_types: Option<Vec<String>>,
+	//pub robots_txt:             bool
 }
 
 impl Default for CrawlingRulesOptions {
@@ -31,6 +32,7 @@ impl Default for CrawlingRulesOptions {
 			links_per_page_budget:  Some(50),
 			max_level:              Some(10),
 			accepted_content_types: Some(vec![String::from("text/html")]),
+			//robots_txt:             true
 		}
 	}
 }
@@ -62,22 +64,46 @@ impl<JS: JobStateValues, TS: TaskStateValues> CrawlingRules<JS, TS> {
 		}
 	}
 
-	pub fn with_status_filter<H: status_filters::Filter<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+	pub fn with_status_filter<
+		H: status_filters::Filter<JS, TS> + Send + Sync + 'static,
+		T: Fn() -> H + Send + Sync + 'static,
+	>(
+		mut self,
+		f: T,
+	) -> Self {
 		self.custom_status_filters.push(Box::new(move || Box::new(f())));
 		self
 	}
 
-	pub fn with_load_filter<H: load_filters::Filter<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+	pub fn with_load_filter<
+		H: load_filters::Filter<JS, TS> + Send + Sync + 'static,
+		T: Fn() -> H + Send + Sync + 'static,
+	>(
+		mut self,
+		f: T,
+	) -> Self {
 		self.custom_load_filter.push(Box::new(move || Box::new(f())));
 		self
 	}
 
-	pub fn with_task_filter<H: task_filters::Filter<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+	pub fn with_task_filter<
+		H: task_filters::Filter<JS, TS> + Send + Sync + 'static,
+		T: Fn() -> H + Send + Sync + 'static,
+	>(
+		mut self,
+		f: T,
+	) -> Self {
 		self.custom_task_filter.push(Box::new(move || Box::new(f())));
 		self
 	}
 
-	pub fn with_task_expander<H: task_expanders::Expander<JS, TS> + Send + Sync + 'static, T: Fn() -> H + Send + Sync + 'static>(mut self, f: T) -> Self {
+	pub fn with_task_expander<
+		H: task_expanders::Expander<JS, TS> + Send + Sync + 'static,
+		T: Fn() -> H + Send + Sync + 'static,
+	>(
+		mut self,
+		f: T,
+	) -> Self {
 		self.custom_task_expanders.push(Box::new(move || Box::new(f())));
 		self
 	}
@@ -93,10 +119,15 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 				vec![LinkTarget::Follow, LinkTarget::HeadFollow],
 				task_filters::SameDomain::new(options.allow_www),
 			)),
-			Box::new(task_filters::HashSetDedup::new()),
 		];
+
+		/*if options.robots_txt {
+			task_filters.push(Box::new(task_filters::RobotsTxt::new() ))
+		}*/
+
+		task_filters.push(Box::new(task_filters::HashSetDedup::new()));
 		if let Some(page_budget) = options.page_budget {
-			task_filters.push(Box::new(task_filters::TotalPageBudget::new(page_budget)));
+			task_filters.push(Box::new(task_filters::TotalPageBudget::new(page_budget)))
 		}
 		if let Some(links_per_page_budget) = options.links_per_page_budget {
 			task_filters.push(Box::new(task_filters::LinkPerPageBudget::new(links_per_page_budget)))
@@ -135,7 +166,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 	}
 
 	fn task_expanders(&self) -> TaskExpanders<JS, TS> {
-		let mut task_expanders: TaskExpanders<JS, TS> = vec![Box::new(task_expanders::FollowLinks::new(self.options.link_target))];
+		let mut task_expanders: TaskExpanders<JS, TS> =
+			vec![Box::new(task_expanders::FollowLinks::new(self.options.link_target))];
 
 		for e in &self.custom_task_expanders {
 			task_expanders.push(e());
@@ -230,7 +262,11 @@ impl<R: Resolver> Crawler<R> {
 		CrawlerIter { rx, _h: h }
 	}
 
-	pub fn go<JS: JobStateValues, TS: TaskStateValues>(&self, job: Job<JS, TS>, update_tx: Sender<JobUpdate<JS, TS>>) -> PinnedTask {
+	pub fn go<JS: JobStateValues, TS: TaskStateValues>(
+		&self,
+		job: Job<JS, TS>,
+		update_tx: Sender<JobUpdate<JS, TS>>,
+	) -> PinnedTask {
 		TracingTask::new(span!(url=%job.url), async move {
 			let job = ResolvedJob::from(job);
 
@@ -279,10 +315,18 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
 
 pub type MultiCrawlerTuple<JS, TS, R> = (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, R> {
-	pub fn new(pp_h: &Handle, concurrency_profile: config::ConcurrencyProfile, networking_profile: config::ResolvedNetworkingProfile<R>) -> MultiCrawlerTuple<JS, TS, R> {
+	pub fn new(
+		pp_h: &Handle,
+		concurrency_profile: config::ConcurrencyProfile,
+		networking_profile: config::ResolvedNetworkingProfile<R>,
+	) -> MultiCrawlerTuple<JS, TS, R> {
 		let (job_tx, job_rx) = bounded_ch::<Job<JS, TS>>(concurrency_profile.job_tx_buffer_size());
 		let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
-		(MultiCrawler { job_rx, update_tx, parse_tx: pp_h.tx.clone(), concurrency_profile, networking_profile }, job_tx, update_rx)
+		(
+			MultiCrawler { job_rx, update_tx, parse_tx: pp_h.tx.clone(), concurrency_profile, networking_profile },
+			job_tx,
+			update_rx,
+		)
 	}
 
 	async fn process(self) -> Result<()> {

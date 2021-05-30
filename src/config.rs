@@ -200,7 +200,15 @@ pub struct ResolvedNetworkingProfile<R: Resolver = AsyncHyperResolver> {
 
 impl<R: Resolver> ResolvedNetworkingProfile<R> {
 	fn new(p: NetworkingProfile<R>) -> Result<Self> {
-		let resolver = if let Some(r) = p.resolver { r } else { Arc::new(R::new_default().context("cannot create default resolver")?.with_net_blacklist(Arc::clone(&RESERVED_SUBNETS))) };
+		let resolver = if let Some(r) = p.resolver {
+			r
+		} else {
+			Arc::new(
+				R::new_default()
+					.context("cannot create default resolver")?
+					.with_net_blacklist(Arc::clone(&RESERVED_SUBNETS)),
+			)
+		};
 
 		Ok(Self { values: p.values, resolver })
 	}

@@ -45,3 +45,4 @@ pin-project = "~1.0.7"
 lazy_static = "~1.4.0"
 num_cpus = "~1.13.0"
 rand = "~0.8.0"
+robotstxt = { git = "https://github.com/let4be/robotstxt" }

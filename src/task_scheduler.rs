@@ -21,7 +21,17 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 		let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
 		let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
 
-		TaskScheduler { task_filters: job.rules.task_filters(), job, task_seq_num: 0, pages_pending: 0, tasks_tx, tasks_rx, job_update_tx, job_update_rx, update_tx }
+		TaskScheduler {
+			task_filters: job.rules.task_filters(),
+			job,
+			task_seq_num: 0,
+			pages_pending: 0,
+			tasks_tx,
+			tasks_rx,
+			job_update_tx,
+			job_update_rx,
+			update_tx,
+		}
 	}
 
 	fn schedule(&mut self, task: Arc<Task>) {
@@ -71,9 +81,20 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 		self.pages_pending -= 1;
 		self.task_seq_num += 1;
 
+		if task_response.task.link.waker {
+			for filter in &mut self.task_filters {
+				filter.wake(&mut self.job.ctx);
+			}
+		}
+
+		let mut links = self.job.ctx.consume_links();
+
 		if let (JobStatus::Processing(Ok(ref r)), false) = (&task_response.status, ignore_links) {
-			let tasks: Vec<_> = r
-				.links
+			links.extend(r.links.clone());
+		}
+
+		if !links.is_empty() {
+			let tasks: Vec<_> = links
 				.iter()
 				.filter_map(|link| Task::new(Arc::clone(link), &task_response.task).ok())
 				.map(|mut task| (self.schedule_filter(&mut task), task))
@@ -103,7 +124,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 		let mut root_task = Task::new_root(&self.job.url)?;
 
 		Ok(TracingTask::new(span!(url = %self.job.url), async move {
-			trace!(soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32, hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32, "Starting...");
+			trace!(
+				soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32,
+				hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32,
+				"Starting..."
+			);
 
 			let r = self.schedule_filter(&mut root_task);
 			let root_task = Arc::new(root_task);

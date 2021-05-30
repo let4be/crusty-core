@@ -14,7 +14,8 @@ use crate::{
 };
 
 pub(crate) type HttpClient<R> = hyper::Client<HttpConnector<R>>;
-pub(crate) type HttpConnector<R> = hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<ResolverAdaptor<R>>>>;
+pub(crate) type HttpConnector<R> =
+	hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<ResolverAdaptor<R>>>>;
 
 pub(crate) trait ClientFactory<R: Resolver> {
 	fn make(&self) -> (HttpClient<R>, hyper_utils::Stats);
@@ -83,17 +84,24 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 	async fn resolve(&mut self, task: Arc<Task>) -> Result<ResolveData> {
 		let t = Instant::now();
 
-		let host = task.link.url.host_str().with_context(|| format!("cannot get host from {:?}", task.link.url.as_str()))?;
+		let host =
+			task.link.url.host_str().with_context(|| format!("cannot get host from {:?}", task.link.url.as_str()))?;
 
 		let res = self.resolver.resolve(host).await.with_context(|| format!("cannot resolve host {} -> ip", host))?;
 
 		Ok(ResolveData { metrics: ResolveMetrics { resolve_dur: t.elapsed() }, addrs: res.collect() })
 	}
 
-	async fn status(&mut self, task: Arc<Task>, client: &HttpClient<R>, is_head: bool) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
+	async fn status(
+		&mut self,
+		task: Arc<Task>,
+		client: &HttpClient<R>,
+		is_head: bool,
+	) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
 		let mut status_metrics = StatusMetrics { wait_dur: task.queued_at.elapsed(), ..Default::default() };
 
-		let uri = hyper::Uri::from_str(task.link.url.as_str()).with_context(|| format!("cannot create http uri {}", &task.link.url))?;
+		let uri = hyper::Uri::from_str(task.link.url.as_str())
+			.with_context(|| format!("cannot create http uri {}", &task.link.url))?;
 
 		let t = Instant::now();
 
@@ -113,7 +121,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		status_metrics.status_dur = t.elapsed();
 		let rs = resp.status();
 
-		let status = HttpStatus { started_processing_on: t, status_code: rs.as_u16() as i32, headers: resp.headers().clone(), metrics: status_metrics };
+		let status = HttpStatus {
+			started_processing_on: t,
+			status_code:           rs.as_u16() as i32,
+			headers:               resp.headers().clone(),
+			metrics:               status_metrics,
+		};
 
 		for filter in self.status_filters.iter() {
 			let r = filter.accept(&mut self.job.ctx, &task, &status);
@@ -132,10 +145,17 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		Ok((status, resp))
 	}
 
-	async fn load(&mut self, task: Arc<Task>, status: &HttpStatus, stats: &hyper_utils::Stats, mut resp: hyper::Response<hyper::Body>) -> Result<(LoadData, Box<dyn io::Read + Sync + Send>)> {
+	async fn load(
+		&mut self,
+		task: Arc<Task>,
+		status: &HttpStatus,
+		stats: &hyper_utils::Stats,
+		mut resp: hyper::Response<hyper::Body>,
+	) -> Result<(LoadData, Box<dyn io::Read + Sync + Send>)> {
 		let mut load_metrics = LoadMetrics { ..Default::default() };
 
-		let enc = String::from(resp.headers().get(http::header::CONTENT_ENCODING).map_or("", |h| h.to_str().unwrap_or("")));
+		let enc =
+			String::from(resp.headers().get(http::header::CONTENT_ENCODING).map_or("", |h| h.to_str().unwrap_or("")));
 
 		let body = self.read(&mut resp, enc).await.with_context(|| "cannot read http get response")?;
 
@@ -162,7 +182,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		Ok((load_data, Box::new(body.reader())))
 	}
 
-	async fn follow(&mut self, task: Arc<Task>, status: HttpStatus, reader: Box<dyn io::Read + Sync + Send>) -> Result<FollowData> {
+	async fn follow(
+		&mut self,
+		task: Arc<Task>,
+		status: HttpStatus,
+		reader: Box<dyn io::Read + Sync + Send>,
+	) -> Result<FollowData> {
 		let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
 
 		let task_state = Arc::new(Mutex::new(Some(TS::default())));
@@ -208,7 +233,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			}
 		};
 
-		let _ = self.parse_tx.send_async(ParserTask { payload: Box::new(payload), time: Instant::now(), res_tx: parse_res_tx }).await;
+		let _ = self
+			.parse_tx
+			.send_async(ParserTask { payload: Box::new(payload), time: Instant::now(), res_tx: parse_res_tx })
+			.await;
 
 		let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
 		let follow_data = parser_response.payload?;
@@ -223,16 +251,31 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		Ok(follow_data)
 	}
 
-	async fn process_task(&mut self, task: Arc<Task>, client: &HttpClient<R>, stats: &hyper_utils::Stats) -> Result<JobProcessing> {
+	async fn process_task(
+		&mut self,
+		task: Arc<Task>,
+		client: &HttpClient<R>,
+		stats: &hyper_utils::Stats,
+	) -> Result<JobProcessing> {
 		let resolve_data = self.resolve(Arc::clone(&task)).await?;
 
-		let mut status = JobProcessing { resolve_data, head_status: StatusResult::None, status: StatusResult::None, load_data: LoadResult::None, follow_data: FollowResult::None, links: vec![] };
+		let mut status = JobProcessing {
+			resolve_data,
+			head_status: StatusResult::None,
+			status: StatusResult::None,
+			load_data: LoadResult::None,
+			follow_data: FollowResult::None,
+			links: vec![],
+		};
 
 		if task.link.target == LinkTarget::JustResolveDNS {
 			return Ok(status)
 		}
 
-		if task.link.target == LinkTarget::Head || task.link.target == LinkTarget::HeadLoad || task.link.target == LinkTarget::HeadFollow {
+		if task.link.target == LinkTarget::Head
+			|| task.link.target == LinkTarget::HeadLoad
+			|| task.link.target == LinkTarget::HeadFollow
+		{
 			match self.status(Arc::clone(&task), &client, true).await {
 				Ok((head_status, _)) => {
 					status.head_status = StatusResult::Ok(head_status);
@@ -273,7 +316,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			return Ok(status)
 		}
 
-		status.follow_data = self.follow(Arc::clone(&task), get_status, reader).await.map(FollowResult::Ok).unwrap_or_else(FollowResult::Err);
+		status.follow_data = self
+			.follow(Arc::clone(&task), get_status, reader)
+			.await
+			.map(FollowResult::Ok)
+			.unwrap_or_else(FollowResult::Err);
 
 		Ok(status)
 	}

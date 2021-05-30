@@ -3,7 +3,7 @@ pub use std::{
 	collections::{HashMap, LinkedList},
 	fmt,
 	future::Future,
-	io,
+	io, mem,
 	net::{IpAddr, SocketAddr},
 	pin::Pin,
 	rc::Rc,

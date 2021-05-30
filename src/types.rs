@@ -13,9 +13,11 @@ pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::Filter<JS, TS> + Send +
 pub type TaskExpanders<JS, TS> = Vec<Box<dyn task_expanders::Expander<JS, TS> + Send + Sync>>;
 
 pub type BoxedTaskFilter<JS, TS> = Box<dyn Fn() -> Box<dyn task_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
-pub type BoxedStatusFilter<JS, TS> = Box<dyn Fn() -> Box<dyn status_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
+pub type BoxedStatusFilter<JS, TS> =
+	Box<dyn Fn() -> Box<dyn status_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
 pub type BoxedLoadFilter<JS, TS> = Box<dyn Fn() -> Box<dyn load_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
-pub type BoxedTaskExpander<JS, TS> = Box<dyn Fn() -> Box<dyn task_expanders::Expander<JS, TS> + Send + Sync> + Send + Sync>;
+pub type BoxedTaskExpander<JS, TS> =
+	Box<dyn Fn() -> Box<dyn task_expanders::Expander<JS, TS> + Send + Sync> + Send + Sync>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
 	pub url:       url::Url,
@@ -25,7 +27,12 @@ pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
-	pub fn new<R: JobRules<JS, TS>>(url: &str, settings: config::CrawlingSettings, rules: R, job_state: JS) -> anyhow::Result<Job<JS, TS>> {
+	pub fn new<R: JobRules<JS, TS>>(
+		url: &str,
+		settings: config::CrawlingSettings,
+		rules: R,
+		job_state: JS,
+	) -> anyhow::Result<Job<JS, TS>> {
 		let url = Url::parse(url).context("cannot parse url")?;
 
 		Ok(Self { url, settings, rules: Box::new(rules), job_state })
@@ -42,7 +49,12 @@ pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
 
 impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
 	fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
-		let mut r = ResolvedJob { url: job.url.clone(), settings: job.settings, rules: Arc::new(job.rules), ctx: JobCtx::new(job.url, job.job_state, TS::default()) };
+		let mut r = ResolvedJob {
+			url:      job.url.clone(),
+			settings: job.settings,
+			rules:    Arc::new(job.rules),
+			ctx:      JobCtx::new(job.url, job.job_state, TS::default()),
+		};
 		r.settings.build();
 		r
 	}
@@ -128,11 +140,12 @@ pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 
 #[derive(Clone)]
 pub struct Link {
-	pub url:      Url,
-	pub alt:      String,
-	pub text:     String,
-	pub redirect: usize,
-	pub target:   LinkTarget,
+	pub url:          Url,
+	pub alt:          String,
+	pub text:         String,
+	pub redirect:     usize,
+	pub target:       LinkTarget,
+	pub(crate) waker: bool,
 }
 
 impl Link {
@@ -253,10 +266,13 @@ pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {}
 
 impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
+pub type JobSharedState = Arc<Mutex<HashMap<String, Box<dyn std::any::Any + Send + Sync>>>>;
+
 #[derive(Clone)]
 pub struct JobCtx<JS, TS> {
 	pub started_at: Instant,
 	pub root_url:   Url,
+	pub shared:     JobSharedState,
 	pub job_state:  Arc<Mutex<JS>>,
 	pub task_state: TS,
 	links:          Vec<Link>,
@@ -264,7 +280,14 @@ pub struct JobCtx<JS, TS> {
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 	pub fn new(root_url: Url, job_state: JS, task_state: TS) -> Self {
-		Self { started_at: Instant::now(), root_url, job_state: Arc::new(Mutex::new(job_state)), task_state, links: vec![] }
+		Self {
+			started_at: Instant::now(),
+			root_url,
+			shared: Arc::new(Mutex::new(HashMap::new())),
+			job_state: Arc::new(Mutex::new(job_state)),
+			task_state,
+			links: vec![],
+		}
 	}
 
 	pub fn timeout_remaining(&self, t: Duration) -> PinnedFut<()> {
@@ -292,16 +315,28 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 }
 
 impl Link {
-	pub(crate) fn new(href: String, alt: String, text: String, redirect: usize, target: LinkTarget, parent: &Link) -> Result<Self> {
+	pub(crate) fn new(
+		href: String,
+		alt: String,
+		text: String,
+		redirect: usize,
+		target: LinkTarget,
+		parent: &Link,
+	) -> Result<Self> {
 		let link_str = href.splitn(2, '#').next().context("cannot prepare link")?;
 
-		let url = Url::parse(link_str).unwrap_or(parent.url.join(link_str).with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))?);
+		let url = Url::parse(link_str).unwrap_or(
+			parent
+				.url
+				.join(link_str)
+				.with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))?,
+		);
 
-		Ok(Self { url, alt: alt.trim().to_string(), text: text.trim().to_string(), redirect, target })
+		Ok(Self { url, alt: alt.trim().to_string(), text: text.trim().to_string(), redirect, target, waker: false })
 	}
 
 	pub(crate) fn new_abs(href: Url, alt: String, text: String, redirect: usize, target: LinkTarget) -> Self {
-		Self { url: href, alt, text, redirect, target }
+		Self { url: href, alt, text, redirect, target, waker: false }
 	}
 }
 
@@ -337,7 +372,13 @@ impl fmt::Display for StatusResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			StatusResult::Ok(ref r) => {
-				write!(f, "[{}] wait {}ms / status {}ms", r.status_code, r.metrics.wait_dur.as_millis(), r.metrics.status_dur.as_millis())
+				write!(
+					f,
+					"[{}] wait {}ms / status {}ms",
+					r.status_code,
+					r.metrics.wait_dur.as_millis(),
+					r.metrics.status_dur.as_millis()
+				)
 			}
 			StatusResult::Err(ref err) => {
 				write!(f, "[err]: {}", err.to_string())
@@ -393,7 +434,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self.status {
 			JobStatus::Processing(Ok(ref r)) => {
-				write!(f, "{} {} {} (load: {}) | (follow: {})", r.resolve_data, r.head_status, r.status, r.load_data, r.follow_data)
+				write!(
+					f,
+					"{} {} {} (load: {}) | (follow: {})",
+					r.resolve_data, r.head_status, r.status, r.load_data, r.follow_data
+				)
 			}
 			JobStatus::Processing(Err(ref err)) => {
 				write!(f, "[dns error : {:?}] {}", err, self.task)

@@ -66,7 +66,10 @@ impl Resolver for AsyncHyperResolver {
 			for addr in r.into_iter() {
 				for blacklisted_net in resolver.net_blacklist.iter() {
 					if blacklisted_net.contains(&addr.ip()) {
-						return Err(io::Error::new(io::ErrorKind::Interrupted, format!("resolved IP {} is blacklisted", addr.ip().to_string().as_str())))
+						return Err(io::Error::new(
+							io::ErrorKind::Interrupted,
+							format!("resolved IP {} is blacklisted", addr.ip().to_string().as_str()),
+						))
 					}
 				}
 				out_addrs.push(addr);

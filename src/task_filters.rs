@@ -10,9 +10,13 @@ pub enum Action {
 pub type ExtResult = rt::ExtResult<Action>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+	// filter can have an optional name
 	fn name(&self) -> String {
 		String::from("no name")
 	}
+	// filters can be waked when a task with Link.waked is considered finished by a scheduler
+	fn wake(&mut self, _ctx: &mut rt::JobCtx<JS, TS>) {}
+	// the job of a filter is to determine what to do with a certain task - accept/skip
 	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> ExtResult;
 }
 
@@ -69,6 +73,19 @@ pub struct HashSetDedup {
 	visited: std::collections::HashSet<String>,
 }
 
+#[derive(Clone, PartialEq, Debug, Copy)]
+enum RobotsTxtState {
+	None,
+	Requested,
+	Decided,
+}
+
+pub struct RobotsTxt {
+	state:       RobotsTxtState,
+	link_buffer: Vec<rt::Link>,
+	matcher:     Option<String>,
+}
+
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
 	name! {}
 
@@ -77,7 +94,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
 
 		let root_url = &ctx.root_url;
 		let root_domain = root_url.host_str().unwrap_or("");
-		if root_domain.strip_prefix(&self.strip_prefix).unwrap_or(root_domain) == domain.strip_prefix(&self.strip_prefix).unwrap_or(domain) {
+		if root_domain.strip_prefix(&self.strip_prefix).unwrap_or(root_domain)
+			== domain.strip_prefix(&self.strip_prefix).unwrap_or(domain)
+		{
 			return Ok(Action::Accept)
 		}
 		Ok(Action::Skip)
@@ -195,5 +214,65 @@ impl MaxRedirect {
 
 	pub fn new(max_redirect: usize) -> Self {
 		Self { max_redirect }
+	}
+}
+
+/*
+let path = super::get_path_params_query(url);
+		self.init_user_agents_and_path(user_agents, path);
+		super::parse_robotstxt(robots_body, self);
+		!self.disallow()
+ */
+
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsTxt {
+	name! {}
+
+	fn wake(&mut self, ctx: &mut rt::JobCtx<JS, TS>) {
+		if let Some(robots) = ctx.shared.lock().unwrap().get("robots") {
+			match robots.downcast_ref::<String>() {
+				Some(_matcher) => {}
+				None => {}
+			}
+		}
+
+		self.state = RobotsTxtState::Decided;
+
+		let mut link_buffer: Vec<rt::Link> = vec![];
+		mem::swap(&mut link_buffer, &mut self.link_buffer);
+		ctx.push_links(link_buffer);
+	}
+
+	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
+		if task.is_root() {
+			if self.state != RobotsTxtState::Requested {
+				let url = Url::parse(
+					format!("{}://{}/robots.txt", ctx.root_url.scheme(), ctx.root_url.host_str().unwrap()).as_str(),
+				)
+				.context("cannot create robots.txt url")?;
+				let mut link = rt::Link::new_abs(url, String::from(""), String::from(""), 0, rt::LinkTarget::Load);
+				link.waker = true;
+
+				ctx.push_links(vec![link]);
+				self.state = RobotsTxtState::Requested;
+			}
+			return Ok(Action::Accept)
+		}
+
+		if self.state == RobotsTxtState::Decided {
+			if let Some(_matcher) = &self.matcher {}
+
+			return Ok(Action::Accept)
+		}
+
+		self.link_buffer.push((*task.link).clone());
+		Ok(Action::Skip)
+	}
+}
+
+impl RobotsTxt {
+	struct_name! {}
+
+	pub fn new() -> Self {
+		Self { state: RobotsTxtState::None, link_buffer: vec![], matcher: None }
 	}
 }
