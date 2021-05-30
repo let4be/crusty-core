@@ -107,10 +107,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		}
 
 		let req_fut = client.request(req.body(hyper::Body::default()).context("could not construct http request")?);
-		let resp = match timeout(*self.job.settings.load_timeout, req_fut).await {
-			Err(_) => return Err(Error::LoadTimeout),
-			Ok(r) => r,
-		};
+		let resp = timeout(*self.job.settings.load_timeout, req_fut).await.map_err(|_| Error::LoadTimeout)?;
 
 		let resp = resp.with_context(|| "cannot make http get")?;
 		status_metrics.status_dur = t.elapsed();
@@ -276,14 +273,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			return Ok(status)
 		}
 
-		match self.follow(Arc::clone(&task), get_status, reader).await {
-			Ok(follow_data) => {
-				status.follow_data = FollowResult::Ok(follow_data);
-			}
-			Err(err) => {
-				status.follow_data = FollowResult::Err(err);
-			}
-		}
+		status.follow_data = self.follow(Arc::clone(&task), get_status, reader).await.map(|follow_data| FollowResult::Ok(follow_data)).unwrap_or_else(|err| FollowResult::Err(err));
+
 		Ok(status)
 	}
 
