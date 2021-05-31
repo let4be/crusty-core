@@ -17,6 +17,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	) -> ExtResult;
 }
 
+#[derive(Default)]
 pub struct RobotsTxt {}
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsTxt {
@@ -40,6 +41,6 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 
 impl RobotsTxt {
 	pub fn new() -> Self {
-		Self {}
+		Self::default()
 	}
 }

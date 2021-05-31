@@ -229,10 +229,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 
 	fn wake(&mut self, ctx: &mut rt::JobCtx<JS, TS>) {
 		if let Some(robots) = ctx.shared.lock().unwrap().get("robots") {
-			match robots.downcast_ref::<String>() {
-				Some(_matcher) => {}
-				None => {}
-			}
+			if let Some(_matcher) = robots.downcast_ref::<String>() {}
 		}
 
 		self.state = RobotsTxtState::Decided;
@@ -269,10 +266,16 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 	}
 }
 
+impl Default for RobotsTxt {
+	fn default() -> Self {
+		Self { state: RobotsTxtState::None, link_buffer: vec![], matcher: None }
+	}
+}
+
 impl RobotsTxt {
 	struct_name! {}
 
 	pub fn new() -> Self {
-		Self { state: RobotsTxtState::None, link_buffer: vec![], matcher: None }
+		Self::default()
 	}
 }
