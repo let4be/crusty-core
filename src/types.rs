@@ -12,12 +12,11 @@ pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::Filter<JS, TS> + Se
 pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::Filter<JS, TS> + Send + Sync>>;
 pub type TaskExpanders<JS, TS> = Vec<Box<dyn task_expanders::Expander<JS, TS> + Send + Sync>>;
 
-pub type BoxedTaskFilter<JS, TS> = Box<dyn Fn() -> Box<dyn task_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
-pub type BoxedStatusFilter<JS, TS> =
-	Box<dyn Fn() -> Box<dyn status_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
-pub type BoxedLoadFilter<JS, TS> = Box<dyn Fn() -> Box<dyn load_filters::Filter<JS, TS> + Send + Sync> + Send + Sync>;
-pub type BoxedTaskExpander<JS, TS> =
-	Box<dyn Fn() -> Box<dyn task_expanders::Expander<JS, TS> + Send + Sync> + Send + Sync>;
+pub type BoxedFn<T> = Box<dyn Fn() -> Box<T> + Send + Sync>;
+pub type BoxedTaskFilter<JS, TS> = BoxedFn<dyn task_filters::Filter<JS, TS> + Send + Sync>;
+pub type BoxedStatusFilter<JS, TS> = BoxedFn<dyn status_filters::Filter<JS, TS> + Send + Sync>;
+pub type BoxedLoadFilter<JS, TS> = BoxedFn<dyn load_filters::Filter<JS, TS> + Send + Sync>;
+pub type BoxedTaskExpander<JS, TS> = BoxedFn<dyn task_expanders::Expander<JS, TS> + Send + Sync>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
 	pub url:       url::Url,
