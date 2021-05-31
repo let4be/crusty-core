@@ -59,9 +59,9 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
 
 async fn process_responses(rx: ChReceiver<JobUpdate<JobState, TaskState>>) {
     while let Ok(r) = rx.recv_async().await {
-        info!("- {}, task state: {:?}", r, r.context.task_state);
+        info!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
-            let mut ctx = r.context.job_state.lock().unwrap();
+            let mut ctx = r.ctx.job_state.lock().unwrap();
             ctx.finalize();
             info!("final job state: {}", ctx);
         }

@@ -140,12 +140,12 @@ pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 
 #[derive(Clone)]
 pub struct Link {
-	pub url:          Url,
-	pub alt:          String,
-	pub text:         String,
-	pub redirect:     usize,
-	pub target:       LinkTarget,
-	pub(crate) waker: bool,
+	pub url:             Url,
+	pub alt:             String,
+	pub text:            String,
+	pub redirect:        usize,
+	pub target:          LinkTarget,
+	pub(crate) is_waker: bool,
 }
 
 impl Link {
@@ -156,7 +156,7 @@ impl Link {
 
 #[derive(Clone, Default)]
 pub struct ResolveMetrics {
-	pub resolve_dur: Duration,
+	pub duration: Duration,
 }
 
 #[derive(Clone)]
@@ -167,28 +167,29 @@ pub struct ResolveData {
 
 #[derive(Clone)]
 pub struct HttpStatus {
-	pub started_processing_on: Instant,
-	pub status_code:           i32,
-	pub headers:               http::HeaderMap<http::HeaderValue>,
-	pub metrics:               StatusMetrics,
+	pub started_at: Instant,
+	pub code:       i32,
+	pub headers:    http::HeaderMap<http::HeaderValue>,
+	pub metrics:    StatusMetrics,
 }
 
 #[derive(Clone, Default)]
 pub struct StatusMetrics {
-	pub wait_dur:   Duration,
-	pub status_dur: Duration,
+	pub wait_duration: Duration,
+	pub duration:      Duration,
 }
 
 #[derive(Clone, Default)]
 pub struct LoadMetrics {
-	pub load_dur:   Duration,
-	pub read_size:  usize,
-	pub write_size: usize,
+	pub wait_duration: Duration,
+	pub duration:      Duration,
+	pub read_size:     usize,
+	pub write_size:    usize,
 }
 
 #[derive(Clone, Default)]
 pub struct FollowMetrics {
-	pub parse_dur: Duration,
+	pub duration: Duration,
 }
 
 pub enum StatusResult {
@@ -217,8 +218,8 @@ pub struct JobProcessing {
 	pub resolve_data: ResolveData,
 	pub head_status:  StatusResult,
 	pub status:       StatusResult,
-	pub load_data:    LoadResult,
-	pub follow_data:  FollowResult,
+	pub load:         LoadResult,
+	pub follow:       FollowResult,
 	pub links:        Vec<Arc<Link>>,
 }
 
@@ -241,9 +242,9 @@ pub struct Task {
 }
 
 pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
-	pub task:    Arc<Task>,
-	pub status:  JobStatus,
-	pub context: JobCtx<JS, TS>,
+	pub task:   Arc<Task>,
+	pub status: JobStatus,
+	pub ctx:    JobCtx<JS, TS>,
 }
 
 pub struct ParserTask {
@@ -253,9 +254,9 @@ pub struct ParserTask {
 }
 
 pub struct ParserResponse {
-	pub payload:   Result<FollowData>,
-	pub wait_time: Duration,
-	pub work_time: Duration,
+	pub payload:       Result<FollowData>,
+	pub wait_duration: Duration,
+	pub work_duration: Duration,
 }
 
 pub trait JobStateValues: Send + Sync + Clone + 'static {}
@@ -332,11 +333,11 @@ impl Link {
 				.with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))?,
 		);
 
-		Ok(Self { url, alt: alt.trim().to_string(), text: text.trim().to_string(), redirect, target, waker: false })
+		Ok(Self { url, alt: alt.trim().to_string(), text: text.trim().to_string(), redirect, target, is_waker: false })
 	}
 
 	pub(crate) fn new_abs(href: Url, alt: String, text: String, redirect: usize, target: LinkTarget) -> Self {
-		Self { url: href, alt, text, redirect, target, waker: false }
+		Self { url: href, alt, text, redirect, target, is_waker: false }
 	}
 }
 
@@ -364,7 +365,7 @@ impl Task {
 impl fmt::Display for ResolveData {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let addrs_str = self.addrs.iter().map(|a| a.ip().to_string()).collect::<Vec<String>>().join(", ");
-		write!(f, "[{}] resolve {}ms", addrs_str, self.metrics.resolve_dur.as_millis())
+		write!(f, "[{}] resolve {}ms", addrs_str, self.metrics.duration.as_millis())
 	}
 }
 
@@ -375,9 +376,9 @@ impl fmt::Display for StatusResult {
 				write!(
 					f,
 					"[{}] wait {}ms / status {}ms",
-					r.status_code,
-					r.metrics.wait_dur.as_millis(),
-					r.metrics.status_dur.as_millis()
+					r.code,
+					r.metrics.wait_duration.as_millis(),
+					r.metrics.duration.as_millis()
 				)
 			}
 			StatusResult::Err(ref err) => {
@@ -398,7 +399,7 @@ impl fmt::Display for LoadResult {
 				write!(
 					f,
 					"loaded {}ms / write {} / read {}",
-					m.load_dur.as_millis(),
+					m.duration.as_millis(),
 					m.write_size.file_size(file_size_opts::CONVENTIONAL).unwrap(),
 					m.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
 				)
@@ -418,7 +419,7 @@ impl fmt::Display for FollowResult {
 		match self {
 			FollowResult::Ok(ref r) => {
 				let m = &r.metrics;
-				write!(f, "parsed {}ms", m.parse_dur.as_millis())
+				write!(f, "parsed {}ms", m.duration.as_millis())
 			}
 			FollowResult::Err(ref err) => {
 				write!(f, "[err following]: {}", err.to_string())
@@ -437,7 +438,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
 				write!(
 					f,
 					"{} {} {} (load: {}) | (follow: {})",
-					r.resolve_data, r.head_status, r.status, r.load_data, r.follow_data
+					r.resolve_data, r.head_status, r.status, r.load, r.follow
 				)
 			}
 			JobStatus::Processing(Err(ref err)) => {

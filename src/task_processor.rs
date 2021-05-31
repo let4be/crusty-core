@@ -89,7 +89,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 		let res = self.resolver.resolve(host).await.with_context(|| format!("cannot resolve host {} -> ip", host))?;
 
-		Ok(ResolveData { metrics: ResolveMetrics { resolve_dur: t.elapsed() }, addrs: res.collect() })
+		Ok(ResolveData { metrics: ResolveMetrics { duration: t.elapsed() }, addrs: res.collect() })
 	}
 
 	async fn status(
@@ -98,7 +98,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		client: &HttpClient<R>,
 		is_head: bool,
 	) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
-		let mut status_metrics = StatusMetrics { wait_dur: task.queued_at.elapsed(), ..Default::default() };
+		let mut status_metrics = StatusMetrics { wait_duration: task.queued_at.elapsed(), ..Default::default() };
 
 		let uri = hyper::Uri::from_str(task.link.url.as_str())
 			.with_context(|| format!("cannot create http uri {}", &task.link.url))?;
@@ -118,14 +118,14 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		let resp = timeout(*self.job.settings.load_timeout, req_fut).await.map_err(|_| Error::LoadTimeout)?;
 
 		let resp = resp.with_context(|| "cannot make http get")?;
-		status_metrics.status_dur = t.elapsed();
+		status_metrics.duration = t.elapsed();
 		let rs = resp.status();
 
 		let status = HttpStatus {
-			started_processing_on: t,
-			status_code:           rs.as_u16() as i32,
-			headers:               resp.headers().clone(),
-			metrics:               status_metrics,
+			started_at: t,
+			code:       rs.as_u16() as i32,
+			headers:    resp.headers().clone(),
+			metrics:    status_metrics,
 		};
 
 		for filter in self.status_filters.iter() {
@@ -152,7 +152,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		stats: &hyper_utils::Stats,
 		mut resp: hyper::Response<hyper::Body>,
 	) -> Result<(LoadData, Box<dyn io::Read + Sync + Send>)> {
-		let mut load_metrics = LoadMetrics { ..Default::default() };
+		let mut load_metrics = LoadMetrics { wait_duration: task.queued_at.elapsed(), ..Default::default() };
 
 		let enc =
 			String::from(resp.headers().get(http::header::CONTENT_ENCODING).map_or("", |h| h.to_str().unwrap_or("")));
@@ -162,7 +162,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		load_metrics.read_size = stats.read();
 		load_metrics.write_size = stats.write();
 
-		load_metrics.load_dur = status.started_processing_on.elapsed();
+		load_metrics.duration = status.started_at.elapsed();
 
 		for filter in self.load_filters.iter() {
 			let r = filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()));
@@ -229,7 +229,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 					*task_state = Some(job_ctx.task_state);
 				}
 
-				Ok(FollowData { metrics: FollowMetrics { parse_dur: t.elapsed() } })
+				Ok(FollowData { metrics: FollowMetrics { duration: t.elapsed() } })
 			}
 		};
 
@@ -263,8 +263,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			resolve_data,
 			head_status: StatusResult::None,
 			status: StatusResult::None,
-			load_data: LoadResult::None,
-			follow_data: FollowResult::None,
+			load: LoadResult::None,
+			follow: FollowResult::None,
 			links: vec![],
 		};
 
@@ -303,11 +303,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 		let reader = match load_r {
 			Err(err) => {
-				status.load_data = LoadResult::Err(err);
+				status.load = LoadResult::Err(err);
 				return Ok(status)
 			}
 			Ok((load_data, reader)) => {
-				status.load_data = LoadResult::Ok(load_data);
+				status.load = LoadResult::Ok(load_data);
 				reader
 			}
 		};
@@ -316,7 +316,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			return Ok(status)
 		}
 
-		status.follow_data = self
+		status.follow = self
 			.follow(Arc::clone(&task), get_status, reader)
 			.await
 			.map(FollowResult::Ok)
@@ -348,7 +348,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 						let _ = self.tx.send_async(JobUpdate {
 							task,
 							status: JobStatus::Processing(status_r),
-							context: ctx,
+							ctx,
 						}).await;
 					}
 					_ = timeout => break

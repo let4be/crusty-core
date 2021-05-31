@@ -42,7 +42,11 @@ impl ParserProcessor {
 				let res = (task.payload)();
 				let work_time = t.elapsed();
 
-				let _ = task.res_tx.send(ParserResponse { payload: res, wait_time, work_time });
+				let _ = task.res_tx.send(ParserResponse {
+					payload:       res,
+					wait_duration: wait_time,
+					work_duration: work_time,
+				});
 			}
 
 			Ok(())

@@ -43,9 +43,9 @@ async fn main() -> anyhow::Result<()> {
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
-        println!("- {}, task state: {:?}", r, r.context.task_state);
+        println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
-            println!("final job state: {:?}", r.context.job_state.lock().unwrap());
+            println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
         }
     }
 

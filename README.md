@@ -39,9 +39,9 @@ async fn main() -> anyhow::Result<()> {
 
   let job = Job::new("https://example.com", settings, rules, JobState::default())?;
   for r in crawler.iter(job) {
-    println!("- {}, task state: {:?}", r, r.context.task_state);
+    println!("- {}, task state: {:?}", r, r.ctx.task_state);
     if let JobStatus::Finished(_) = r.status {
-      println!("final job state: {:?}", r.context.job_state.lock().unwrap());
+      println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
     }
   }
   Ok(())
@@ -50,13 +50,7 @@ async fn main() -> anyhow::Result<()> {
 
 If you want to get more fancy and configure some stuff or control your imports more precisely
 ```rust
-use crusty_core::{
-  task_expanders,
-  ParserProcessor, CrawlingRules, CrawlingRulesOptions, Crawler, TaskExpander,
-  types::{Job, JobCtx, Task, HttpStatus, JobStatus},
-  config,
-  select::predicate::Name, select::document::Document,
-};
+use crusty_core::prelude::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct JobState {
@@ -72,8 +66,7 @@ pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
 impl TaskExpander<JobState, TaskState> for DataExtractor {
   fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
-    let title = doc.find(Name("title")).next().map(|v|v.text());
-    if let Some(title) = title {
+    if let Some(title) = doc.find(Name("title")).next().map(|v|v.text()) {
       ctx.job_state.lock().unwrap().sum_title_len += title.len();
       ctx.task_state.title = title;
     }
@@ -83,25 +76,19 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  let concurrency_profile = config::ConcurrencyProfile::default();
-  let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
-
-  let networking_profile = config::NetworkingProfile::default().resolve()?;
-  let crawler = Crawler::new(networking_profile, &pp);
+  let crawler = Crawler::new_default()?;
 
   let settings = config::CrawlingSettings::default();
-  let rules_opt = CrawlingRulesOptions::default();
-  let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor{} );
+  let rules = CrawlingRules::default().with_task_expander(|| DataExtractor{} );
 
   let job = Job::new("https://example.com", settings, rules, JobState::default())?;
   for r in crawler.iter(job) {
-    println!("- {}, task state: {:?}", r, r.context.task_state);
+    println!("- {}, task state: {:?}", r, r.ctx.task_state);
     if let JobStatus::Finished(_) = r.status {
-      println!("final job state: {:?}", r.context.job_state.lock().unwrap());
+      println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
     }
   }
-
-  Ok(pp.join().await??)
+  Ok(())
 }
 ```
 

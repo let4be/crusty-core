@@ -81,7 +81,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 		self.pages_pending -= 1;
 		self.task_seq_num += 1;
 
-		if task_response.task.link.waker {
+		if task_response.task.link.is_waker {
 			for filter in &mut self.task_filters {
 				filter.wake(&mut self.job.ctx);
 			}
@@ -165,7 +165,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 			} else {
 				Ok(JobFinished {})
 			};
-			Ok(JobUpdate { task: root_task, status: JobStatus::Finished(res), context: self.job.ctx })
+			Ok(JobUpdate { task: root_task, status: JobStatus::Finished(res), ctx: self.job.ctx })
 		})
 		.instrument())
 	}

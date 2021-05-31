@@ -49,7 +49,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 	name! {}
 
 	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> ExtResult {
-		let sc = status.status_code;
+		let sc = status.code;
 		if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
 			return Ok(())
 		}
