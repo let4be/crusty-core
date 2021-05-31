@@ -11,6 +11,7 @@ use crate::{
 	hyper_utils,
 	resolver::{Adaptor as ResolverAdaptor, Resolver},
 	types::*,
+	ParserProcessor,
 };
 
 pub(crate) type HttpClient<R> = hyper::Client<HttpConnector<R>>;
@@ -30,7 +31,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Reso
 
 	tx:             Sender<JobUpdate<JS, TS>>,
 	tasks_rx:       Receiver<Arc<Task>>,
-	parse_tx:       Sender<ParserTask>,
+	pp:             ParserProcessor,
 	client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
 	resolver:       Arc<R>,
 }
@@ -40,7 +41,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		job: ResolvedJob<JS, TS>,
 		tx: Sender<JobUpdate<JS, TS>>,
 		tasks_rx: Receiver<Arc<Task>>,
-		parse_tx: Sender<ParserTask>,
+		pp: ParserProcessor,
 		client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
 		resolver: Arc<R>,
 		term_on_error: bool,
@@ -53,7 +54,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			job,
 			tx,
 			tasks_rx,
-			parse_tx,
+			pp,
 			client_factory,
 			resolver,
 		}
@@ -188,8 +189,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		status: HttpStatus,
 		reader: Box<dyn io::Read + Sync + Send>,
 	) -> Result<FollowData> {
-		let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
-
 		let task_state = Arc::new(Mutex::new(Some(TS::default())));
 		let links = Arc::new(Mutex::new(Some(Vec::<Link>::new())));
 
@@ -203,7 +202,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 			move || -> Result<FollowData> {
 				let t = Instant::now();
-
 				let document = select::document::Document::from_read(reader).context("cannot read html document")?;
 
 				for expander in task_expanders.iter() {
@@ -233,13 +231,14 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			}
 		};
 
-		let _ = self
-			.parse_tx
-			.send_async(ParserTask { payload: Box::new(payload), time: Instant::now(), res_tx: parse_res_tx })
-			.await;
+		let parser_response = {
+			panic::catch_unwind(panic::AssertUnwindSafe(|| {
+				self.pp.install(ParserTask { payload: Box::new(payload), time: Instant::now() })
+			}))
+			.map_err(|err| Error::FollowPanic { source: anyhow!("panic during parser task processing: {:?}", err) })?
+		};
 
-		let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
-		let follow_data = parser_response.payload?;
+		let follow = parser_response.payload?;
 		{
 			let mut task_state = task_state.lock().unwrap();
 			self.job.ctx.task_state = task_state.take().unwrap();
@@ -248,7 +247,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			let mut links = links.lock().unwrap();
 			self.job.ctx.push_links(links.take().unwrap());
 		}
-		Ok(follow_data)
+		Ok(follow)
 	}
 
 	async fn process_task(

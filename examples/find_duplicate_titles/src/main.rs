@@ -91,10 +91,10 @@ async fn main() -> Result<()> {
         parser_concurrency: 2,
         ..config::ConcurrencyProfile::default()
     };
-    let pp = ParserProcessor::spawn( concurrency_profile, 1024 * 1024 * 32);
+    let pp = ParserProcessor::new( concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, &pp);
+    let crawler = Crawler::new(networking_profile, pp);
 
     let settings = config::CrawlingSettings::default();
     let rules_options = CrawlingRulesOptions{
@@ -112,7 +112,6 @@ async fn main() -> Result<()> {
     crawler.go(job, update_tx).await?;
     drop(crawler);
 
-    let _ = pp.join().await?;
     let _ = h_sub.await?;
     Ok(())
 }

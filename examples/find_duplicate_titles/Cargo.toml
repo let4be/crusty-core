@@ -12,6 +12,15 @@ anyhow = "~1.0.40"
 tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
 url = "~2.2.2"
 
+[profile.dev]
+panic = "unwind"
+debug-assertions = false
+
+[profile.release]
+panic = "unwind"
+debug-assertions = false
+opt-level = 3
+
 [[bin]]
 name = "crusty_find_duplicate_titles"
 path = "src/main.rs"

@@ -98,6 +98,11 @@ pub enum Error {
 		#[source]
 		source: anyhow::Error,
 	},
+	#[error("terminated by panic in follow")]
+	FollowPanic {
+		#[source]
+		source: anyhow::Error,
+	},
 }
 
 pub type Result<T> = anyhow::Result<T, Error>;
@@ -249,7 +254,6 @@ pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
 pub struct ParserTask {
 	pub payload: Box<dyn FnOnce() -> Result<FollowData> + Send + 'static>,
 	pub time:    Instant,
-	pub res_tx:  Sender<ParserResponse>,
 }
 
 pub struct ParserResponse {
