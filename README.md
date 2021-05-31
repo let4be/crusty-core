@@ -1,4 +1,5 @@
 ![crates.io](https://img.shields.io/crates/v/crusty-core.svg)
+[![Dependency status](https://deps.rs/repo/github/let4be/crusty-core/status.svg)](https://deps.rs/repo/github/let4be/crusty-core)
 
 # Crusty-core - build your own web crawler!
 
