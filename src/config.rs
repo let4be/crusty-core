@@ -249,7 +249,7 @@ impl Default for CrawlingSettings {
 			job_hard_timeout:          CDuration::from_secs(60),
 			job_soft_timeout:          CDuration::from_secs(30),
 			load_timeout:              CDuration::from_secs(10),
-			user_agent:                Some(String::from("crusty-core/0.13.0")),
+			user_agent:                Some(String::from("crusty-core/0.14.0")),
 			compression:               true,
 			custom_headers:            HashMap::new(),
 			max_response_size:         CBytes(1024 * 1024 * 2),

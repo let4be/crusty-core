@@ -59,7 +59,9 @@ impl ParserProcessor {
 			.into_iter()
 			.map(|n| {
 				let p = self.clone();
-				let thread_builder = std::thread::Builder::new().stack_size(self.stack_size_bytes);
+				let thread_builder = std::thread::Builder::new()
+					.name(format!("parser processor {}", n))
+					.stack_size(self.stack_size_bytes);
 				let h = thread_builder
 					.spawn(move || {
 						let _ = futures_lite::future::block_on(p.process(n));
