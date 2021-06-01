@@ -231,12 +231,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			}
 		};
 
-		let parser_response = {
-			panic::catch_unwind(panic::AssertUnwindSafe(|| {
-				self.pp.install(ParserTask { payload: Box::new(payload), time: Instant::now() })
-			}))
-			.map_err(|err| Error::FollowPanic { source: anyhow!("panic during parser task processing: {:?}", err) })?
-		};
+		let parser_response = self.pp.spawn(ParserTask { payload: Box::new(payload), time: Instant::now() }).await;
 
 		let follow = parser_response.payload?;
 		{
