@@ -5,7 +5,6 @@ pub use std::{
 	future::Future,
 	io, mem,
 	net::{IpAddr, SocketAddr},
-	panic::{self, UnwindSafe},
 	pin::Pin,
 	rc::Rc,
 	str::FromStr,
