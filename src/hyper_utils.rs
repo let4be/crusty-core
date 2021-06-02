@@ -13,7 +13,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct Stats {
-	read: Arc<Mutex<usize>>,
+	read:  Arc<Mutex<usize>>,
 	write: Arc<Mutex<usize>>,
 }
 
@@ -55,7 +55,7 @@ pub struct CountingStream<T> {
 	#[pin]
 	stream: T,
 	#[pin]
-	stats: Stats,
+	stats:  Stats,
 }
 
 impl<T> CountingStream<T> {
@@ -111,7 +111,7 @@ impl<T: AsyncRead + AsyncWrite + Connection + Unpin> Connection for CountingStre
 
 #[derive(Clone, Debug)]
 pub struct CountingConnector<R> {
-	c: R,
+	c:         R,
 	pub stats: Stats,
 }
 

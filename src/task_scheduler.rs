@@ -3,17 +3,17 @@ use crate::internal_prelude::*;
 use crate::{task_filters, types::*};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
-	job: ResolvedJob<JS, TS>,
+	job:          ResolvedJob<JS, TS>,
 	task_filters: TaskFilters<JS, TS>,
 
-	task_seq_num: usize,
+	task_seq_num:  usize,
 	pages_pending: usize,
 
-	tasks_tx: Sender<Arc<Task>>,
-	pub(crate) tasks_rx: Receiver<Arc<Task>>,
+	tasks_tx:                 Sender<Arc<Task>>,
+	pub(crate) tasks_rx:      Receiver<Arc<Task>>,
 	pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
-	job_update_rx: Receiver<JobUpdate<JS, TS>>,
-	update_tx: Sender<JobUpdate<JS, TS>>,
+	job_update_rx:            Receiver<JobUpdate<JS, TS>>,
+	update_tx:                Sender<JobUpdate<JS, TS>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
@@ -56,7 +56,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 					} else {
 						trace!(action = "skip", filter_name = %filter.name(), action);
 					}
-					return Ok(task_filters::Action::Skip);
+					return Ok(task_filters::Action::Skip)
 				}
 				Err(ExtError::Term) => {
 					if task.is_root() {
@@ -64,11 +64,11 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 					} else {
 						trace!(action = "term", filter_name = %filter.name(), action);
 					}
-					return Err(ExtError::Term);
+					return Err(ExtError::Term)
 				}
 				Err(ExtError::Other(err)) => {
 					trace!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
-					continue;
+					continue
 				}
 			}
 		}
@@ -100,13 +100,13 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 				.map(|mut task| (self.schedule_filter(&mut task), task))
 				.take_while(|(r, _)| {
 					if let Err(ExtError::Term) = r {
-						return false;
+						return false
 					}
 					true
 				})
 				.filter_map(|(r, task)| {
 					if let Ok(task_filters::Action::Skip) = r {
-						return None;
+						return None
 					}
 					Some(task)
 				})

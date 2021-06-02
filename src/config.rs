@@ -146,21 +146,21 @@ impl ConcurrencyProfile {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct NetworkingProfileValues {
-	pub connect_timeout: Option<CDuration>,
-	pub socket_read_buffer_size: Option<CBytes>,
+	pub connect_timeout:          Option<CDuration>,
+	pub socket_read_buffer_size:  Option<CBytes>,
 	pub socket_write_buffer_size: Option<CBytes>,
-	pub bind_local_ipv4: Option<CIP4Addr>,
-	pub bind_local_ipv6: Option<CIP6Addr>,
+	pub bind_local_ipv4:          Option<CIP4Addr>,
+	pub bind_local_ipv6:          Option<CIP6Addr>,
 }
 
 impl Default for NetworkingProfileValues {
 	fn default() -> Self {
 		Self {
-			connect_timeout: Some(CDuration::from_secs(5)),
+			connect_timeout:          Some(CDuration::from_secs(5)),
 			socket_write_buffer_size: Some(CBytes(32 * 1024)),
-			socket_read_buffer_size: Some(CBytes(32 * 1024)),
-			bind_local_ipv4: None,
-			bind_local_ipv6: None,
+			socket_read_buffer_size:  Some(CBytes(32 * 1024)),
+			bind_local_ipv4:          None,
+			bind_local_ipv6:          None,
 		}
 	}
 }
@@ -212,16 +212,16 @@ impl<R: Resolver> ResolvedNetworkingProfile<R> {
 #[derive(Clone, Debug, Deserialize)]
 pub struct CrawlingSettings {
 	pub internal_read_buffer_size: CBytes,
-	pub concurrency: usize,
-	pub max_response_size: CBytes,
-	pub delay: CDuration,
-	pub delay_jitter: CDuration,
-	pub load_timeout: CDuration,
-	pub job_soft_timeout: CDuration,
-	pub job_hard_timeout: CDuration,
-	pub custom_headers: HashMap<String, Vec<String>>,
-	pub user_agent: Option<String>,
-	pub compression: bool,
+	pub concurrency:               usize,
+	pub max_response_size:         CBytes,
+	pub delay:                     CDuration,
+	pub delay_jitter:              CDuration,
+	pub load_timeout:              CDuration,
+	pub job_soft_timeout:          CDuration,
+	pub job_hard_timeout:          CDuration,
+	pub custom_headers:            HashMap<String, Vec<String>>,
+	pub user_agent:                Option<String>,
+	pub compression:               bool,
 }
 
 impl fmt::Display for CrawlingSettings {
@@ -237,17 +237,17 @@ impl fmt::Display for CrawlingSettings {
 impl Default for CrawlingSettings {
 	fn default() -> Self {
 		Self {
-			concurrency: 2,
+			concurrency:               2,
 			internal_read_buffer_size: CBytes(32 * 1024),
-			delay: CDuration::from_secs(1),
-			delay_jitter: CDuration::from_millis(1000),
-			job_hard_timeout: CDuration::from_secs(60),
-			job_soft_timeout: CDuration::from_secs(30),
-			load_timeout: CDuration::from_secs(10),
-			user_agent: Some(String::from("crusty-core/0.18.0")),
-			compression: true,
-			custom_headers: HashMap::new(),
-			max_response_size: CBytes(1024 * 1024 * 2),
+			delay:                     CDuration::from_secs(1),
+			delay_jitter:              CDuration::from_millis(1000),
+			job_hard_timeout:          CDuration::from_secs(60),
+			job_soft_timeout:          CDuration::from_secs(30),
+			load_timeout:              CDuration::from_secs(10),
+			user_agent:                Some(String::from("crusty-core/0.18.0")),
+			compression:               true,
+			custom_headers:            HashMap::new(),
+			max_response_size:         CBytes(1024 * 1024 * 2),
 		}
 	}
 }

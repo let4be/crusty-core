@@ -4,14 +4,14 @@ use crate::{config, types::*};
 
 #[derive(Clone)]
 pub struct ParserProcessor {
-	concurrency: usize,
+	concurrency:      usize,
 	stack_size_bytes: usize,
-	rx: Receiver<ParserTask>,
+	rx:               Receiver<ParserTask>,
 }
 
 pub struct Handle {
 	pub(crate) tx: Sender<ParserTask>,
-	h: tokio::task::JoinHandle<Result<()>>,
+	h:             tokio::task::JoinHandle<Result<()>>,
 }
 
 impl Handle {
@@ -34,7 +34,7 @@ impl ParserProcessor {
 		TracingTask::new(span!(n = n), async move {
 			while let Ok(task) = self.rx.recv() {
 				if task.res_tx.is_disconnected() {
-					continue;
+					continue
 				}
 
 				let wait_time = task.time.elapsed();
@@ -43,7 +43,7 @@ impl ParserProcessor {
 				let work_time = t.elapsed();
 
 				let _ = task.res_tx.send(ParserResponse {
-					payload: res,
+					payload:       res,
 					wait_duration: wait_time,
 					work_duration: work_time,
 				});

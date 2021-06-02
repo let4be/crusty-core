@@ -8,13 +8,23 @@ repos:
     -   id: end-of-file-fixer
     -   id: check-yaml
     -   id: check-added-large-files
--   repo: https://github.com/let4be/pre-commit-rust
-    rev: v1.0
-    hooks:
-        -   id: fmt
-        -   id: clippy
 -   repo: local
     hooks:
+        -   id: fmt
+            name: Format sources
+            entry: bash -c "cargo +nightly fmt --"
+            language: system
+            pass_filenames: false
+        -   id: clippy
+            name: Lint sources
+            entry: bash -c "cargo +nightly clippy -- -D warnings"
+            language: system
+            pass_filenames: false
+        -   id: fmt-examples
+            name: Format examples
+            entry: bash -c "cargo +nightly fmt -- examples/**/src/main.rs"
+            language: system
+            pass_filenames: false
         -   id: generate-readme
             name: generate-readme
             entry: bash -c "markdown-pp README.tmpl.md -o README.md"

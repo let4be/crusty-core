@@ -17,9 +17,9 @@ pub type BoxedLoadFilter<JS, TS> = BoxedFn<dyn load_filters::Filter<JS, TS> + Se
 pub type BoxedTaskExpander<JS, TS> = BoxedFn<dyn task_expanders::Expander<JS, TS> + Send + Sync>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
-	pub url: url::Url,
-	pub settings: config::CrawlingSettings,
-	pub rules: Box<dyn JobRules<JS, TS>>,
+	pub url:       url::Url,
+	pub settings:  config::CrawlingSettings,
+	pub rules:     Box<dyn JobRules<JS, TS>>,
 	pub job_state: JS,
 }
 
@@ -38,19 +38,19 @@ impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
 
 #[derive(Clone)]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
-	pub url: url::Url,
+	pub url:      url::Url,
 	pub settings: config::CrawlingSettings,
-	pub rules: Arc<Box<dyn JobRules<JS, TS>>>,
-	pub ctx: JobCtx<JS, TS>,
+	pub rules:    Arc<Box<dyn JobRules<JS, TS>>>,
+	pub ctx:      JobCtx<JS, TS>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
 	fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
 		let mut r = ResolvedJob {
-			url: job.url.clone(),
+			url:      job.url.clone(),
 			settings: job.settings,
-			rules: Arc::new(job.rules),
-			ctx: JobCtx::new(job.url, job.job_state, TS::default()),
+			rules:    Arc::new(job.rules),
+			ctx:      JobCtx::new(job.url, job.job_state, TS::default()),
 		};
 		r.settings.build();
 		r
@@ -76,7 +76,7 @@ pub enum Error {
 	StatusFilterTerm { name: String },
 	#[error("terminated by error in status filter(term_by_error=true) {name:?}")]
 	StatusFilterTermByError {
-		name: String,
+		name:   String,
 		#[source]
 		source: anyhow::Error,
 	},
@@ -84,7 +84,7 @@ pub enum Error {
 	LoadFilterTerm { name: String },
 	#[error("terminated by error in load filter(term_by_error=true) {name:?}")]
 	LoadFilterTermByError {
-		name: String,
+		name:   String,
 		#[source]
 		source: anyhow::Error,
 	},
@@ -92,7 +92,7 @@ pub enum Error {
 	TaskExpanderTerm { name: String },
 	#[error("terminated by error in task expander(term_by_error=true) {name:?}")]
 	TaskExpanderTermByError {
-		name: String,
+		name:   String,
 		#[source]
 		source: anyhow::Error,
 	},
@@ -120,11 +120,11 @@ pub enum JobError {
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub enum LinkTarget {
 	JustResolveDNS = 0,
-	Head = 1,
-	Load = 2,
-	HeadLoad = 3,
-	Follow = 4,
-	HeadFollow = 5,
+	Head           = 1,
+	Load           = 2,
+	HeadLoad       = 3,
+	Follow         = 4,
+	HeadFollow     = 5,
 }
 
 impl fmt::Display for LinkTarget {
@@ -137,11 +137,11 @@ pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 
 #[derive(Clone)]
 pub struct Link {
-	pub url: Url,
-	pub alt: String,
-	pub text: String,
-	pub redirect: usize,
-	pub target: LinkTarget,
+	pub url:             Url,
+	pub alt:             String,
+	pub text:            String,
+	pub redirect:        usize,
+	pub target:          LinkTarget,
 	pub(crate) is_waker: bool,
 }
 
@@ -158,30 +158,30 @@ pub struct ResolveMetrics {
 
 #[derive(Clone)]
 pub struct ResolveData {
-	pub addrs: Vec<SocketAddr>,
+	pub addrs:   Vec<SocketAddr>,
 	pub metrics: ResolveMetrics,
 }
 
 #[derive(Clone)]
 pub struct HttpStatus {
 	pub started_at: Instant,
-	pub code: i32,
-	pub headers: http::HeaderMap<http::HeaderValue>,
-	pub metrics: StatusMetrics,
+	pub code:       i32,
+	pub headers:    http::HeaderMap<http::HeaderValue>,
+	pub metrics:    StatusMetrics,
 }
 
 #[derive(Clone, Default)]
 pub struct StatusMetrics {
 	pub wait_duration: Duration,
-	pub duration: Duration,
+	pub duration:      Duration,
 }
 
 #[derive(Clone, Default)]
 pub struct LoadMetrics {
 	pub wait_duration: Duration,
-	pub duration: Duration,
-	pub read_size: usize,
-	pub write_size: usize,
+	pub duration:      Duration,
+	pub read_size:     usize,
+	pub write_size:    usize,
 }
 
 #[derive(Clone, Default)]
@@ -213,11 +213,11 @@ pub struct LoadData {
 
 pub struct JobProcessing {
 	pub resolve_data: ResolveData,
-	pub head_status: StatusResult,
-	pub status: StatusResult,
-	pub load: LoadResult,
-	pub follow: FollowResult,
-	pub links: Vec<Arc<Link>>,
+	pub head_status:  StatusResult,
+	pub status:       StatusResult,
+	pub load:         LoadResult,
+	pub follow:       FollowResult,
+	pub links:        Vec<Arc<Link>>,
 }
 
 impl JobProcessing {
@@ -247,24 +247,24 @@ pub enum JobStatus {
 #[derive(Clone)]
 pub struct Task {
 	pub queued_at: Instant,
-	pub link: Arc<Link>,
-	pub level: usize,
+	pub link:      Arc<Link>,
+	pub level:     usize,
 }
 
 pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
-	pub task: Arc<Task>,
+	pub task:   Arc<Task>,
 	pub status: JobStatus,
-	pub ctx: JobCtx<JS, TS>,
+	pub ctx:    JobCtx<JS, TS>,
 }
 
 pub struct ParserTask {
 	pub payload: Box<dyn FnOnce() -> Result<FollowData> + Send + 'static>,
-	pub time: Instant,
-	pub res_tx: Sender<ParserResponse>,
+	pub time:    Instant,
+	pub res_tx:  Sender<ParserResponse>,
 }
 
 pub struct ParserResponse {
-	pub payload: Result<FollowData>,
+	pub payload:       Result<FollowData>,
 	pub wait_duration: Duration,
 	pub work_duration: Duration,
 }
@@ -282,11 +282,11 @@ pub type JobSharedState = Arc<Mutex<HashMap<String, Box<dyn std::any::Any + Send
 #[derive(Clone)]
 pub struct JobCtx<JS, TS> {
 	pub started_at: Instant,
-	pub root_url: Url,
-	pub shared: JobSharedState,
-	pub job_state: Arc<Mutex<JS>>,
+	pub root_url:   Url,
+	pub shared:     JobSharedState,
+	pub job_state:  Arc<Mutex<JS>>,
 	pub task_state: TS,
-	links: Vec<Link>,
+	links:          Vec<Link>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
@@ -306,7 +306,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 
 		Box::pin(async move {
 			if t <= elapsed {
-				return;
+				return
 			}
 			tokio::time::sleep(t - elapsed).await;
 		})
@@ -361,7 +361,7 @@ impl Task {
 	pub(crate) fn new(link: Arc<Link>, parent: &Task) -> Result<Task> {
 		let scheme = link.url.scheme();
 		if scheme != "http" && scheme != "https" {
-			return Err(anyhow!("invalid scheme {:#?} in {:#?}", scheme, link.url.as_str()).into());
+			return Err(anyhow!("invalid scheme {:#?} in {:#?}", scheme, link.url.as_str()).into())
 		}
 
 		Ok(Task { queued_at: Instant::now(), link, level: parent.level + 1 })

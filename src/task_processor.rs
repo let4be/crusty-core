@@ -21,17 +21,17 @@ pub(crate) trait ClientFactory<R: Resolver> {
 }
 
 pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
-	job: ResolvedJob<JS, TS>,
+	job:            ResolvedJob<JS, TS>,
 	status_filters: StatusFilters<JS, TS>,
-	load_filters: LoadFilters<JS, TS>,
+	load_filters:   LoadFilters<JS, TS>,
 	task_expanders: Arc<TaskExpanders<JS, TS>>,
-	term_on_error: bool,
+	term_on_error:  bool,
 
-	tx: Sender<JobUpdate<JS, TS>>,
-	tasks_rx: Receiver<Arc<Task>>,
-	parse_tx: Sender<ParserTask>,
+	tx:             Sender<JobUpdate<JS, TS>>,
+	tasks_rx:       Receiver<Arc<Task>>,
+	parse_tx:       Sender<ParserTask>,
 	client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
-	resolver: Arc<R>,
+	resolver:       Arc<R>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS, R> {
@@ -65,7 +65,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			let buf = buf.context("error during reading")?;
 			if buf.has_remaining() {
 				if bytes.len() + buf.len() > *self.job.settings.max_response_size as usize {
-					return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size));
+					return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size))
 				}
 				bytes.put(buf);
 			}
@@ -74,7 +74,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		if encoding.contains("gzip") || encoding.contains("deflate") {
 			let mut buf: Vec<u8> = vec![];
 			let _ = GzDecoder::new(bytes.reader()).read_to_end(&mut buf)?;
-			return Ok(Bytes::from(buf));
+			return Ok(Bytes::from(buf))
 		}
 
 		Ok(bytes.freeze())
@@ -122,9 +122,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 		let status = HttpStatus {
 			started_at: t,
-			code: rs.as_u16() as i32,
-			headers: resp.headers().clone(),
-			metrics: status_metrics,
+			code:       rs.as_u16() as i32,
+			headers:    resp.headers().clone(),
+			metrics:    status_metrics,
 		};
 
 		for filter in self.status_filters.iter() {
@@ -134,7 +134,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 				Err(ExtError::Other(err)) => {
 					trace!("error in status filter {}: {:#}", filter.name(), &err);
 					if self.term_on_error {
-						return Err(Error::StatusFilterTermByError { name: filter.name(), source: err });
+						return Err(Error::StatusFilterTermByError { name: filter.name(), source: err })
 					}
 				}
 				Ok(_) => {}
@@ -170,7 +170,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 				Err(ExtError::Other(err)) => {
 					trace!("error in status filter {}: {:#}", filter.name(), &err);
 					if self.term_on_error {
-						return Err(Error::LoadFilterTermByError { name: filter.name(), source: err });
+						return Err(Error::LoadFilterTermByError { name: filter.name(), source: err })
 					}
 				}
 				Ok(_) => {}
@@ -211,7 +211,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 						Err(ExtError::Term) => return Err(Error::TaskExpanderTerm { name: expander.name() }),
 						Err(ExtError::Other(err)) => {
 							if term_on_error {
-								return Err(Error::TaskExpanderTermByError { name: expander.name(), source: err });
+								return Err(Error::TaskExpanderTermByError { name: expander.name(), source: err })
 							}
 							trace!("error in task expander {}: {:#}", expander.name(), &err);
 						}
@@ -261,7 +261,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		let mut status = JobProcessing::new(resolve_data);
 
 		if task.link.target == LinkTarget::JustResolveDNS {
-			return Ok(status);
+			return Ok(status)
 		}
 
 		if task.link.target == LinkTarget::Head
@@ -274,18 +274,18 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 				}
 				Err(err) => {
 					status.head_status = StatusResult::Err(err);
-					return Ok(status);
+					return Ok(status)
 				}
 			}
 		};
 		if task.link.target == LinkTarget::Head {
-			return Ok(status);
+			return Ok(status)
 		}
 
 		let (get_status, resp) = match self.status(Arc::clone(&task), &client, false).await {
 			Err(err) => {
 				status.status = StatusResult::Err(err);
-				return Ok(status);
+				return Ok(status)
 			}
 			Ok((get_status, resp)) => (get_status, resp),
 		};
@@ -296,7 +296,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		let reader = match load_r {
 			Err(err) => {
 				status.load = LoadResult::Err(err);
-				return Ok(status);
+				return Ok(status)
 			}
 			Ok((load_data, reader)) => {
 				status.load = LoadResult::Ok(load_data);
@@ -305,7 +305,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		};
 
 		if task.link.target == LinkTarget::Load || task.link.target == LinkTarget::HeadLoad {
-			return Ok(status);
+			return Ok(status)
 		}
 
 		status.follow = self
@@ -325,7 +325,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 			while let Ok(task) = self.tasks_rx.recv_async().await {
 				if self.tasks_rx.is_disconnected() {
-					break;
+					break
 				}
 
 				stats.reset();

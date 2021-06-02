@@ -22,7 +22,7 @@ pub trait Resolver: Clone + Send + Sync + 'static {
 
 #[derive(Clone, Debug)]
 pub struct AsyncHyperResolver {
-	resolver: Arc<TokioAsyncResolver>,
+	resolver:      Arc<TokioAsyncResolver>,
 	net_blacklist: Arc<Vec<IpNet>>,
 }
 
@@ -68,7 +68,7 @@ impl Resolver for AsyncHyperResolver {
 						return Err(io::Error::new(
 							io::ErrorKind::Interrupted,
 							format!("resolved IP {} is blacklisted", addr.ip().to_string().as_str()),
-						));
+						))
 					}
 				}
 				out_addrs.push(addr);
