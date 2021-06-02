@@ -1,1 +1,1 @@
-core/README.md
+main/README.md
