@@ -1,10 +1,10 @@
-use crusty_core::prelude::*;
-
-use anyhow::anyhow;
 use std::{
     collections::{hash_map::Entry, HashMap},
     env, fmt,
 };
+
+use anyhow::anyhow;
+use crusty_core::prelude::*;
 use tracing::{info, Level};
 use tracing_subscriber;
 
@@ -20,16 +20,7 @@ impl fmt::Display for JobState {
         let r = self
             .duplicate_titles
             .iter()
-            .map(|(k, u)| {
-                format!(
-                    "'{}': [{}]",
-                    k,
-                    u.iter()
-                        .map(|u| u.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )
-            })
+            .map(|(k, u)| format!("'{}': [{}]", k, u.iter().map(|u| u.to_string()).collect::<Vec<String>>().join(", ")))
             .collect::<Vec<String>>()
             .join("; ");
         write!(f, "{}", r)
@@ -41,13 +32,7 @@ impl JobState {
         self.duplicate_titles = self
             .duplicate_titles
             .iter()
-            .filter_map(|(k, v)| {
-                if v.len() < 2 {
-                    None
-                } else {
-                    Some((k.clone(), v.clone()))
-                }
-            })
+            .filter_map(|(k, v)| if v.len() < 2 { None } else { Some((k.clone(), v.clone())) })
             .collect();
     }
 }
@@ -62,6 +47,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
     fn name(&self) -> String {
         String::from("My Fancy Data Extractor With Fancy Name")
     }
+
     fn expand(
         &self,
         ctx: &mut JobCtx<JobState, TaskState>,
@@ -69,11 +55,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
         _: &HttpStatus,
         doc: &Document,
     ) -> task_expanders::ExtResult {
-        let title = doc
-            .find(Name("title"))
-            .next()
-            .map(|v| v.text())
-            .ok_or(anyhow!("title not found"))?;
+        let title = doc.find(Name("title")).next().map(|v| v.text()).ok_or(anyhow!("title not found"))?;
         ctx.task_state.title = title.clone();
 
         {
@@ -100,10 +82,7 @@ async fn process_responses(rx: ChReceiver<JobUpdate<JobState, TaskState>>) {
 }
 
 fn configure_tracing() -> Result<()> {
-    let collector = tracing_subscriber::fmt()
-        .with_target(false)
-        .with_max_level(Level::INFO)
-        .finish();
+    let collector = tracing_subscriber::fmt().with_target(false).with_max_level(Level::INFO).finish();
     tracing::subscriber::set_global_default(collector)?;
     Ok(())
 }
@@ -115,13 +94,11 @@ async fn main() -> Result<()> {
     let job_url = if let Ok(job_url) = env::var("JOB_URL") {
         job_url
     } else {
-        return Err(anyhow!("please specify JOB_URL env. variable"));
+        return Err(anyhow!("please specify JOB_URL env. variable"))
     };
 
-    let concurrency_profile = config::ConcurrencyProfile {
-        parser_concurrency: 2,
-        ..config::ConcurrencyProfile::default()
-    };
+    let concurrency_profile =
+        config::ConcurrencyProfile { parser_concurrency: 2, ..config::ConcurrencyProfile::default() };
     let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
