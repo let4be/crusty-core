@@ -54,7 +54,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
         task: &Task,
         _: &HttpStatus,
         doc: &Document,
-    ) -> task_expanders::ExtResult {
+    ) -> task_expanders::Result {
         let title = doc.find(Name("title")).next().map(|v| v.text()).ok_or(anyhow!("title not found"))?;
         ctx.task_state.title = title.clone();
 

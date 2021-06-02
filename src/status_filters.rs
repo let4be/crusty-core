@@ -2,13 +2,13 @@
 use crate::internal_prelude::*;
 use crate::types as rt;
 
-pub type ExtResult = rt::ExtResult<()>;
+pub type Result = rt::ExtResult<()>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	fn name(&self) -> String {
 		String::from("no name")
 	}
-	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> ExtResult;
+	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> Result;
 }
 
 pub struct ContentType {
@@ -18,7 +18,7 @@ pub struct ContentType {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for ContentType {
 	name! {}
 
-	fn accept(&self, _ctx: &mut rt::JobCtx<JS, TS>, _task: &rt::Task, status: &rt::HttpStatus) -> ExtResult {
+	fn accept(&self, _ctx: &mut rt::JobCtx<JS, TS>, _task: &rt::Task, status: &rt::HttpStatus) -> Result {
 		let content_type = status
 			.headers
 			.get(http::header::CONTENT_TYPE)
@@ -48,7 +48,7 @@ pub struct Redirect {}
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirect {
 	name! {}
 
-	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> ExtResult {
+	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> Result {
 		let sc = status.code;
 		if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
 			return Ok(())

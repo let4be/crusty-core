@@ -43,7 +43,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 		}
 	}
 
-	fn schedule_filter(&mut self, task: &mut Task) -> task_filters::ExtResult {
+	fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Result {
 		let action = if task.link.redirect > 0 { "[scheduling redirect]" } else { "[scheduling]" };
 
 		let _span = span!(task = %task).entered();

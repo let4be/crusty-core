@@ -21,7 +21,7 @@ pub struct TaskState {
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
+    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::Result {
         if let Some(title) = doc.find(Name("title")).next().map(|v| v.text()) {
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
             ctx.task_state.title = title;
@@ -73,7 +73,7 @@ pub struct TaskState {
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
 impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::ExtResult {
+    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::Result {
         let title = doc.find(Name("title")).next().map(|v| v.text());
         if let Some(title) = title {
             ctx.job_state.lock().unwrap().sum_title_len += title.len();

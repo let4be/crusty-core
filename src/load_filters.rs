@@ -2,7 +2,7 @@
 use crate::internal_prelude::*;
 use crate::types as rt;
 
-pub type ExtResult = rt::ExtResult<()>;
+pub type Result = rt::ExtResult<()>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	fn name(&self) -> String {
@@ -14,7 +14,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 		task: &rt::Task,
 		status: &rt::HttpStatus,
 		reader: Box<dyn io::Read + Sync + Send>,
-	) -> ExtResult;
+	) -> Result;
 }
 
 #[derive(Default)]
@@ -27,7 +27,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
 		mut reader: Box<dyn io::Read + Sync + Send>,
-	) -> ExtResult {
+	) -> Result {
 		if task.link.url.as_str().ends_with("robots.txt") {
 			let mut content = String::from("");
 			let _ = reader.read_to_string(&mut content).context("cannot read robots.txt")?;

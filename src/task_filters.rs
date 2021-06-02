@@ -7,7 +7,7 @@ pub enum Action {
 	Accept,
 	Skip,
 }
-pub type ExtResult = rt::ExtResult<Action>;
+pub type Result = rt::ExtResult<Action>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	// filter can have an optional name
@@ -17,7 +17,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	// filters can be waked when a task with Link.waked is considered finished by a scheduler
 	fn wake(&mut self, _ctx: &mut rt::JobCtx<JS, TS>) {}
 	// the job of a filter is to determine what to do with a certain task - accept/skip
-	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> ExtResult;
+	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> Result;
 }
 
 pub struct SelectiveTaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
@@ -36,7 +36,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Selecti
 		self.filter.name()
 	}
 
-	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> Result {
 		let link_target = self.link_targets.iter().find(|target| target.to_string() == task.link.target.to_string());
 		if link_target.is_none() {
 			return Ok(Action::Accept)
@@ -89,7 +89,7 @@ pub struct RobotsTxt {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
 	name! {}
 
-	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		let domain = task.link.url.host_str().unwrap_or("_");
 
 		let root_url = &ctx.root_url;
@@ -118,7 +118,7 @@ impl SameDomain {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for TotalPageBudget {
 	name! {}
 
-	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> Result {
 		if self.budget >= self.allocated_budget {
 			return Err(ExtError::Term)
 		}
@@ -138,7 +138,7 @@ impl TotalPageBudget {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPerPageBudget {
 	name! {}
 
-	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, seq_num: usize, _: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Result {
 		if seq_num > self.current_task_seq_num {
 			self.links_within_current_task = 0;
 		}
@@ -161,7 +161,7 @@ impl LinkPerPageBudget {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for PageLevel {
 	name! {}
 
-	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		if task.level >= self.max_level {
 			return Err(ExtError::Term)
 		}
@@ -180,7 +180,7 @@ impl PageLevel {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSetDedup {
 	name! {}
 
-	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		if self.visited.contains(task.link.url.as_str()) {
 			return Ok(Action::Skip)
 		}
@@ -201,7 +201,7 @@ impl HashSetDedup {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for MaxRedirect {
 	name! {}
 
-	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		if task.link.redirect > self.max_redirect {
 			return Ok(Action::Skip)
 		}
@@ -239,7 +239,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		ctx.push_links(link_buffer);
 	}
 
-	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
+	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		if task.is_root() {
 			if self.state != RobotsTxtState::Requested {
 				let url = Url::parse(

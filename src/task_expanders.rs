@@ -2,7 +2,7 @@
 use crate::internal_prelude::*;
 use crate::types as rt;
 
-pub type ExtResult = rt::ExtResult<()>;
+pub type Result = rt::ExtResult<()>;
 
 pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	fn name(&self) -> String {
@@ -14,7 +14,7 @@ pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 		task: &rt::Task,
 		status: &rt::HttpStatus,
 		document: &select::document::Document,
-	) -> ExtResult;
+	) -> Result;
 }
 
 pub struct FollowLinks {
@@ -30,7 +30,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for Follo
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
 		document: &select::document::Document,
-	) -> ExtResult {
+	) -> Result {
 		let links: Vec<rt::Link> = document
 			.find(select::predicate::Name("a"))
 			.filter_map(|n| {
@@ -71,7 +71,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for LoadI
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
 		document: &select::document::Document,
-	) -> ExtResult {
+	) -> Result {
 		let links: Vec<rt::Link> = document
 			.find(select::predicate::Name("img"))
 			.filter_map(|n| {
