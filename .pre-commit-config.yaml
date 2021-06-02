@@ -13,3 +13,10 @@ repos:
     hooks:
         -   id: fmt
         -   id: clippy
+-   repo: local
+    hooks:
+        -   id: generate-readme
+            name: generate-readme
+            entry: bash -c "markdown-pp README.tmpl.md -o README.md"
+            language: system
+            pass_filenames: false
