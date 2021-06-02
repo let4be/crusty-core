@@ -5,7 +5,7 @@ authors = ["Sergey F. <let4be@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-crusty-core = {path = "../.."}
+crusty-core = {path = "../../core"}
 anyhow = "~1.0.40"
 tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
 url = "~2.2.2"

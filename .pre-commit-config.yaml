@@ -20,13 +20,8 @@ repos:
             entry: bash -c "cargo +nightly clippy -- -D warnings"
             language: system
             pass_filenames: false
-        -   id: fmt-examples
-            name: Format examples
-            entry: bash -c "cargo +nightly fmt -- examples/**/src/main.rs"
-            language: system
-            pass_filenames: false
         -   id: generate-readme
-            name: generate-readme
+            name: Generate readme
             entry: bash -c "markdown-pp README.tmpl.md -o README.md && git add -u README.md"
             language: system
             pass_filenames: false

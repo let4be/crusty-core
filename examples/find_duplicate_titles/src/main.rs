@@ -6,7 +6,6 @@ use std::{
 use anyhow::anyhow;
 use crusty_core::prelude::*;
 use tracing::{info, Level};
-use tracing_subscriber;
 
 type Result<T> = anyhow::Result<T>;
 
@@ -14,7 +13,6 @@ type Result<T> = anyhow::Result<T>;
 pub struct JobState {
     duplicate_titles: HashMap<String, Vec<url::Url>>,
 }
-
 impl fmt::Display for JobState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let r = self
@@ -55,7 +53,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
         _: &HttpStatus,
         doc: &Document,
     ) -> task_expanders::Result {
-        let title = doc.find(Name("title")).next().map(|v| v.text()).ok_or(anyhow!("title not found"))?;
+        let title = doc.find(Name("title")).next().map(|v| v.text()).ok_or_else(|| anyhow!("title not found"))?;
         ctx.task_state.title = title.clone();
 
         {
