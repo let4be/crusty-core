@@ -220,6 +220,19 @@ pub struct JobProcessing {
 	pub links:        Vec<Arc<Link>>,
 }
 
+impl JobProcessing {
+	pub fn new(resolve_data: ResolveData) -> Self {
+		Self {
+			resolve_data,
+			head_status: StatusResult::None,
+			status: StatusResult::None,
+			load: LoadResult::None,
+			follow: FollowResult::None,
+			links: vec![],
+		}
+	}
+}
+
 pub struct FollowData {
 	pub metrics: FollowMetrics,
 }

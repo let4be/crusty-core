@@ -116,7 +116,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		let req_fut = client.request(req.body(hyper::Body::default()).context("could not construct http request")?);
 		let resp = timeout(*self.job.settings.load_timeout, req_fut).await.map_err(|_| Error::LoadTimeout)?;
 
-		let resp = resp.with_context(|| "cannot make http get")?;
+		let resp = resp.context("cannot make http get")?;
 		status_metrics.duration = t.elapsed();
 		let rs = resp.status();
 
@@ -258,14 +258,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 	) -> Result<JobProcessing> {
 		let resolve_data = self.resolve(Arc::clone(&task)).await?;
 
-		let mut status = JobProcessing {
-			resolve_data,
-			head_status: StatusResult::None,
-			status: StatusResult::None,
-			load: LoadResult::None,
-			follow: FollowResult::None,
-			links: vec![],
-		};
+		let mut status = JobProcessing::new(resolve_data);
 
 		if task.link.target == LinkTarget::JustResolveDNS {
 			return Ok(status)
@@ -359,7 +352,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 					};
 
 					tokio::select! {
-						_ = time::sleep(*self.job.settings.delay+jitter_ms) => {}
+						_ = time::sleep(*self.job.settings.delay + jitter_ms) => {}
 						_ = &mut timeout => break
 					}
 				}
