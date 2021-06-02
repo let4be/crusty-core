@@ -158,14 +158,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 			}
 
 			trace!("Finishing..., pages remaining = {}", self.pages_pending);
-			let res = if is_hard_timeout {
+			let status = JobStatus::Finished(if is_hard_timeout {
 				Err(JobError::JobFinishedByHardTimeout)
 			} else if is_soft_timeout {
 				Err(JobError::JobFinishedBySoftTimeout)
 			} else {
 				Ok(JobFinished {})
-			};
-			Ok(JobUpdate { task: root_task, status: JobStatus::Finished(res), ctx: self.job.ctx })
+			});
+			Ok(JobUpdate { task: root_task, status, ctx: self.job.ctx })
 		})
 		.instrument())
 	}

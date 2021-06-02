@@ -276,7 +276,7 @@ impl<R: Resolver> Crawler<R> {
 
 			let mut processor_handles = vec![];
 			for i in 0..job.settings.concurrency {
-				let mut processor = TaskProcessor::new(
+				let processor = TaskProcessor::new(
 					job.clone(),
 					scheduler.job_update_tx.clone(),
 					scheduler.tasks_rx.clone(),

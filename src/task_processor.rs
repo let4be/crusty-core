@@ -324,7 +324,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		Ok(status)
 	}
 
-	pub(crate) fn go(&mut self, n: usize) -> PinnedTask {
+	pub(crate) fn go<'a>(mut self, n: usize) -> PinnedTask<'a> {
 		TracingTask::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
 
@@ -339,7 +339,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 				tokio::select! {
 					mut status_r = self.process_task(Arc::clone(&task), &client, &stats) => {
-						let ctx = self.job.ctx.clone();
 						if let Ok(ref mut status_data) = status_r {
 							status_data.links.extend(self.job.ctx.consume_links());
 						}
@@ -347,7 +346,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 						let _ = self.tx.send_async(JobUpdate {
 							task,
 							status: JobStatus::Processing(status_r),
-							ctx,
+							ctx: self.job.ctx.clone(),
 						}).await;
 					}
 					_ = timeout => break
