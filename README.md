@@ -3,7 +3,7 @@
 
 # Crusty-core - build your own web crawler!
 
-### Example - crawl single website, collect information about `TITLE` tags 
+### Example - crawl single website, collect information about `TITLE` tags
 
 ```rust
 use crusty_core::prelude::*;
@@ -116,9 +116,17 @@ crusty-core = "~0.18.0"
 - scales with ease when you want to crawl millions/billions of domains
 - it's fast, fast, fast!
 
+### Development
+
+- make sure `rustup` is installed: https://rustup.rs/
+
+- make sure `pre-commit` is installed: https://pre-commit.com/
+
+- run `setup.sh`
+
 ### Notes
 
-Please see [examples](examples) for more complicated usage scenarios. 
+Please see [examples](examples) for more complicated usage scenarios.
 This crawler is more verbose than some others, but it allows incredible customization at each and every step.
 
 If you are interested in the area of broad web crawling there's [crusty](https://github.com/let4be/crusty), developed fully on top of `crusty-core` that tries to tackle on some challenges of broad web crawling

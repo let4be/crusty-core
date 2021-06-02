@@ -12,12 +12,12 @@ use crate::{
 
 #[derive(Clone)]
 pub struct CrawlingRulesOptions {
-	pub max_redirect:           usize,
-	pub link_target:            LinkTarget,
-	pub allow_www:              bool,
-	pub page_budget:            Option<usize>,
-	pub links_per_page_budget:  Option<usize>,
-	pub max_level:              Option<usize>,
+	pub max_redirect: usize,
+	pub link_target: LinkTarget,
+	pub allow_www: bool,
+	pub page_budget: Option<usize>,
+	pub links_per_page_budget: Option<usize>,
+	pub max_level: Option<usize>,
 	pub accepted_content_types: Option<Vec<String>>,
 	//pub robots_txt:             bool
 }
@@ -25,12 +25,12 @@ pub struct CrawlingRulesOptions {
 impl Default for CrawlingRulesOptions {
 	fn default() -> Self {
 		Self {
-			max_redirect:           5,
-			link_target:            LinkTarget::HeadFollow,
-			allow_www:              true,
-			page_budget:            Some(50),
-			links_per_page_budget:  Some(50),
-			max_level:              Some(10),
+			max_redirect: 5,
+			link_target: LinkTarget::HeadFollow,
+			allow_www: true,
+			page_budget: Some(50),
+			links_per_page_budget: Some(50),
+			max_level: Some(10),
 			accepted_content_types: Some(vec![String::from("text/html")]),
 			//robots_txt:             true
 		}
@@ -41,8 +41,8 @@ pub struct CrawlingRules<JS, TS> {
 	pub options: CrawlingRulesOptions,
 
 	pub custom_status_filters: Vec<BoxedStatusFilter<JS, TS>>,
-	pub custom_load_filter:    Vec<BoxedLoadFilter<JS, TS>>,
-	pub custom_task_filter:    Vec<BoxedTaskFilter<JS, TS>>,
+	pub custom_load_filter: Vec<BoxedLoadFilter<JS, TS>>,
+	pub custom_task_filter: Vec<BoxedTaskFilter<JS, TS>>,
 	pub custom_task_expanders: Vec<BoxedTaskExpander<JS, TS>>,
 }
 
@@ -58,8 +58,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> CrawlingRules<JS, TS> {
 			options: opts,
 
 			custom_status_filters: vec![],
-			custom_load_filter:    vec![],
-			custom_task_filter:    vec![],
+			custom_load_filter: vec![],
+			custom_task_filter: vec![],
 			custom_task_expanders: vec![],
 		}
 	}
@@ -210,7 +210,7 @@ impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
 
 pub struct Crawler<R: Resolver = AsyncHyperResolver> {
 	networking_profile: config::ResolvedNetworkingProfile<R>,
-	parse_tx:           Sender<ParserTask>,
+	parse_tx: Sender<ParserTask>,
 }
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues> {
@@ -306,11 +306,11 @@ impl<R: Resolver> Crawler<R> {
 
 #[derive(Clone)]
 pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
-	job_rx:              Receiver<Job<JS, TS>>,
-	update_tx:           Sender<JobUpdate<JS, TS>>,
-	parse_tx:            Sender<ParserTask>,
+	job_rx: Receiver<Job<JS, TS>>,
+	update_tx: Sender<JobUpdate<JS, TS>>,
+	parse_tx: Sender<ParserTask>,
 	concurrency_profile: config::ConcurrencyProfile,
-	networking_profile:  config::ResolvedNetworkingProfile<R>,
+	networking_profile: config::ResolvedNetworkingProfile<R>,
 }
 
 pub type MultiCrawlerTuple<JS, TS, R> = (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>);

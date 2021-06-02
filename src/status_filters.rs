@@ -27,7 +27,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Content
 			.context("cannot read content-type value")?;
 		for accepted in &self.accepted {
 			if content_type.contains(accepted) {
-				return Ok(())
+				return Ok(());
 			}
 		}
 		Err(rt::ExtError::Term)
@@ -51,7 +51,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> ExtResult {
 		let sc = status.code;
 		if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
-			return Ok(())
+			return Ok(());
 		}
 
 		let location = status

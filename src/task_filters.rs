@@ -22,7 +22,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 
 pub struct SelectiveTaskFilter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	link_targets: Vec<rt::LinkTarget>,
-	filter:       Box<dyn Filter<JS, TS> + Send + Sync>,
+	filter: Box<dyn Filter<JS, TS> + Send + Sync>,
 }
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> SelectiveTaskFilter<JS, TS> {
@@ -39,7 +39,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Selecti
 	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> ExtResult {
 		let link_target = self.link_targets.iter().find(|target| target.to_string() == task.link.target.to_string());
 		if link_target.is_none() {
-			return Ok(Action::Accept)
+			return Ok(Action::Accept);
 		}
 		self.filter.accept(ctx, task_seq_num, task)
 	}
@@ -51,13 +51,13 @@ pub struct SameDomain {
 
 pub struct TotalPageBudget {
 	allocated_budget: usize,
-	budget:           usize,
+	budget: usize,
 }
 
 pub struct LinkPerPageBudget {
-	current_task_seq_num:      usize,
+	current_task_seq_num: usize,
 	links_within_current_task: usize,
-	allocated_budget:          usize,
+	allocated_budget: usize,
 }
 
 pub struct PageLevel {
@@ -81,9 +81,9 @@ enum RobotsTxtState {
 }
 
 pub struct RobotsTxt {
-	state:       RobotsTxtState,
+	state: RobotsTxtState,
 	link_buffer: Vec<rt::Link>,
-	matcher:     Option<String>,
+	matcher: Option<String>,
 }
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
@@ -97,7 +97,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDom
 		if root_domain.strip_prefix(&self.strip_prefix).unwrap_or(root_domain)
 			== domain.strip_prefix(&self.strip_prefix).unwrap_or(domain)
 		{
-			return Ok(Action::Accept)
+			return Ok(Action::Accept);
 		}
 		Ok(Action::Skip)
 	}
@@ -120,7 +120,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for TotalPa
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> ExtResult {
 		if self.budget >= self.allocated_budget {
-			return Err(ExtError::Term)
+			return Err(ExtError::Term);
 		}
 		self.budget += 1;
 		Ok(Action::Accept)
@@ -144,7 +144,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPer
 		}
 		self.links_within_current_task += 1;
 		if self.links_within_current_task > self.allocated_budget {
-			return Err(ExtError::Term)
+			return Err(ExtError::Term);
 		}
 		Ok(Action::Accept)
 	}
@@ -163,7 +163,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for PageLev
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
 		if task.level >= self.max_level {
-			return Err(ExtError::Term)
+			return Err(ExtError::Term);
 		}
 		Ok(Action::Accept)
 	}
@@ -182,7 +182,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSet
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
 		if self.visited.contains(task.link.url.as_str()) {
-			return Ok(Action::Skip)
+			return Ok(Action::Skip);
 		}
 
 		self.visited.insert(task.link.url.to_string());
@@ -203,7 +203,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for MaxRedi
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> ExtResult {
 		if task.link.redirect > self.max_redirect {
-			return Ok(Action::Skip)
+			return Ok(Action::Skip);
 		}
 		Ok(Action::Accept)
 	}
@@ -252,13 +252,13 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				ctx.push_links(vec![link]);
 				self.state = RobotsTxtState::Requested;
 			}
-			return Ok(Action::Accept)
+			return Ok(Action::Accept);
 		}
 
 		if self.state == RobotsTxtState::Decided {
 			if let Some(_matcher) = &self.matcher {}
 
-			return Ok(Action::Accept)
+			return Ok(Action::Accept);
 		}
 
 		self.link_buffer.push((*task.link).clone());
