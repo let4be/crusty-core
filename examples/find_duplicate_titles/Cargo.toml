@@ -5,7 +5,7 @@ authors = ["Sergey F. <let4be@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-crusty-core = {path = "../../core"}
+crusty-core = {path = "../../main" }
 tracing-subscriber = "~0.2.17"
 tracing = "~0.1.25"
 anyhow = "~1.0.40"

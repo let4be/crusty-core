@@ -22,6 +22,6 @@ repos:
             pass_filenames: false
         -   id: generate-readme
             name: Generate readme
-            entry: bash -c "markdown-pp core/README.tmpl.md -o core/README.md && git add -u core/README.md"
+            entry: bash -c "markdown-pp main/README.tmpl.md -o main/README.md && git add -u main/README.md"
             language: system
             pass_filenames: false

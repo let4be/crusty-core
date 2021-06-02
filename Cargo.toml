@@ -12,5 +12,5 @@ opt-level = 3
         "examples/find_duplicate_titles",
         "examples/simple",
         "examples/simple-short",
-        "core"
+        "main"
     ]

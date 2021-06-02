@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
 
-cargo release --manifest-path core/Cargo.toml "$@"
+cargo release --manifest-path main/Cargo.toml "$@"
