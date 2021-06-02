@@ -136,6 +136,8 @@ crusty-core = "~0.18.0"
 
 - make sure `pre-commit` is installed: https://pre-commit.com/
 
+- make sure `markdown-pp` is installed: https://github.com/jreese/markdown-pp
+
 - run `setup.sh`
 
 ### Notes
