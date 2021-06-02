@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
 

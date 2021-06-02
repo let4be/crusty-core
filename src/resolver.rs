@@ -1,6 +1,5 @@
 use std::{
-	io,
-	net::{SocketAddr, ToSocketAddrs},
+	net::ToSocketAddrs,
 	task::{Context, Poll},
 	vec::IntoIter,
 };

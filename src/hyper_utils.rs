@@ -1,7 +1,4 @@
-use std::{
-	io,
-	task::{Context, Poll},
-};
+use std::task::{Context, Poll};
 
 use hyper::{
 	client::connect::{Connected, Connection},

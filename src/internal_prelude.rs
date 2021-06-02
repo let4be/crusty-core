@@ -1,10 +1,11 @@
 pub use std::{
 	cell::RefCell,
-	collections::{HashMap, LinkedList},
+	collections::{HashMap, HashSet, LinkedList},
 	fmt,
 	future::Future,
 	io, mem,
-	net::{IpAddr, SocketAddr},
+	net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+	ops::Deref,
 	pin::Pin,
 	rc::Rc,
 	str::FromStr,

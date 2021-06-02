@@ -1,8 +1,3 @@
-use std::{
-	net::{Ipv4Addr, Ipv6Addr},
-	ops::Deref,
-};
-
 use serde::{de, Deserialize, Deserializer};
 
 #[allow(unused_imports)]
