@@ -328,12 +328,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		TracingTask::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
 
+			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
+
 			while let Ok(task) = self.tasks_rx.recv_async().await {
 				if self.tasks_rx.is_disconnected() {
 					break
 				}
-
-				let timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
 
 				stats.reset();
 
@@ -349,7 +349,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 							ctx: self.job.ctx.clone(),
 						}).await;
 					}
-					_ = timeout => break
+					_ = &mut timeout => break
 				}
 
 				if self.job.settings.delay.as_millis() > 0 || self.job.settings.delay_jitter.as_millis() > 0 {
@@ -358,10 +358,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 						Duration::from_millis(rng.gen_range(0..self.job.settings.delay_jitter.as_millis()) as u64)
 					};
 
-					let timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
 					tokio::select! {
 						_ = time::sleep(*self.job.settings.delay+jitter_ms) => {}
-						_ = timeout => break
+						_ = &mut timeout => break
 					}
 				}
 			}
