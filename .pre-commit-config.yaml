@@ -20,6 +20,11 @@ repos:
             entry: bash -c "cargo +nightly clippy -- -D warnings"
             language: system
             pass_filenames: false
+        -   id: udeps
+            name: Find unused dependencies
+            entry: bash -c "cargo +nightly udeps --all-targets "
+            language: system
+            pass_filenames: false
         -   id: generate-readme
             name: Generate readme
             entry: bash -c "markdown-pp main/README.tmpl.md -o main/README.md && git add -u main/README.md"
