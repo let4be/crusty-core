@@ -43,7 +43,11 @@ crusty-core = "~0.23.0"
 
 - make sure `markdown-pp` is installed: https://github.com/jreese/markdown-pp
 
-- run `setup.sh`
+- run `./go setup`
+
+- run `./go check` to run all pre-commit hooks and ensure everything is ready to go for git
+
+- run `./go release minor` to release a next minor version for crates.io
 
 ### Notes
 
