@@ -132,7 +132,7 @@ impl Default for ConcurrencyProfile {
 
 impl ConcurrencyProfile {
 	pub fn transit_buffer_size(&self) -> usize {
-		self.domain_concurrency * 10
+		self.domain_concurrency * 100
 	}
 
 	pub fn job_tx_buffer_size(&self) -> usize {
