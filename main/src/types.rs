@@ -39,21 +39,21 @@ impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
 #[derive(Clone)]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
 	pub url:      url::Url,
-	pub settings: config::CrawlingSettings,
+	pub settings: Arc<config::CrawlingSettings>,
 	pub rules:    Arc<Box<dyn JobRules<JS, TS>>>,
 	pub ctx:      JobCtx<JS, TS>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
-	fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
-		let mut r = ResolvedJob {
+	fn from(mut job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
+		job.settings.build();
+		let settings = Arc::new(job.settings);
+		ResolvedJob {
 			url:      job.url.clone(),
-			settings: job.settings,
+			settings: Arc::clone(&settings),
 			rules:    Arc::new(job.rules),
-			ctx:      JobCtx::new(job.url, job.job_state, TS::default()),
-		};
-		r.settings.build();
-		r
+			ctx:      JobCtx::new(job.url, settings, job.job_state, TS::default()),
+		}
 	}
 }
 
@@ -281,6 +281,7 @@ pub type JobSharedState = Arc<Mutex<HashMap<String, Box<dyn std::any::Any + Send
 
 #[derive(Clone)]
 pub struct JobCtx<JS, TS> {
+	pub settings:   Arc<config::CrawlingSettings>,
 	pub started_at: Instant,
 	pub root_url:   Url,
 	pub shared:     JobSharedState,
@@ -290,10 +291,11 @@ pub struct JobCtx<JS, TS> {
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
-	pub fn new(root_url: Url, job_state: JS, task_state: TS) -> Self {
+	pub fn new(root_url: Url, settings: Arc<config::CrawlingSettings>, job_state: JS, task_state: TS) -> Self {
 		Self {
 			started_at: Instant::now(),
 			root_url,
+			settings,
 			shared: Arc::new(Mutex::new(HashMap::new())),
 			job_state: Arc::new(Mutex::new(job_state)),
 			task_state,

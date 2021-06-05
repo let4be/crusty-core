@@ -19,7 +19,7 @@ pub struct CrawlingRulesOptions {
 	pub links_per_page_budget:  Option<usize>,
 	pub max_level:              Option<usize>,
 	pub accepted_content_types: Option<Vec<String>>,
-	//pub robots_txt:             bool
+	pub robots_txt:             bool,
 }
 
 impl Default for CrawlingRulesOptions {
@@ -31,8 +31,8 @@ impl Default for CrawlingRulesOptions {
 			page_budget:            Some(50),
 			links_per_page_budget:  Some(50),
 			max_level:              Some(10),
-			accepted_content_types: Some(vec![String::from("text/html")]),
-			//robots_txt:             true
+			accepted_content_types: Some(vec![String::from("text/html"), String::from("text/plain")]),
+			robots_txt:             true,
 		}
 	}
 }
@@ -121,9 +121,9 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 			)),
 		];
 
-		/*if options.robots_txt {
-			task_filters.push(Box::new(task_filters::RobotsTxt::new() ))
-		}*/
+		if options.robots_txt {
+			task_filters.push(Box::new(task_filters::RobotsTxt::new()))
+		}
 
 		task_filters.push(Box::new(task_filters::HashSetDedup::new()));
 		if let Some(page_budget) = options.page_budget {
@@ -157,11 +157,17 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 	}
 
 	fn load_filters(&self) -> LoadFilters<JS, TS> {
+		let options = &self.options;
 		let mut load_filters = vec![];
 
 		for e in &self.custom_load_filter {
 			load_filters.push(e());
 		}
+
+		if options.robots_txt {
+			load_filters.push(Box::new(load_filters::RobotsTxt::new()))
+		}
+
 		load_filters
 	}
 

@@ -83,7 +83,7 @@ enum RobotsTxtState {
 pub struct RobotsTxt {
 	state:       RobotsTxtState,
 	link_buffer: Vec<rt::Link>,
-	matcher:     Option<String>,
+	matcher:     Option<robotstxt::matcher::CachingRobotsMatcher<robotstxt::matcher::LongestMatchRobotsMatchStrategy>>,
 }
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
@@ -217,19 +217,15 @@ impl MaxRedirect {
 	}
 }
 
-/*
-let path = super::get_path_params_query(url);
-		self.init_user_agents_and_path(user_agents, path);
-		super::parse_robotstxt(robots_body, self);
-		!self.disallow()
- */
-
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsTxt {
 	name! {}
 
 	fn wake(&mut self, ctx: &mut rt::JobCtx<JS, TS>) {
 		if let Some(robots) = ctx.shared.lock().unwrap().get("robots") {
-			if let Some(_matcher) = robots.downcast_ref::<String>() {}
+			if let Some(robots) = robots.downcast_ref::<String>() {
+				self.matcher =
+					Some(robotstxt::matcher::CachingRobotsMatcher::new(robotstxt::DefaultMatcher::default(), robots));
+			}
 		}
 
 		self.state = RobotsTxtState::Decided;
@@ -246,18 +242,34 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 					format!("{}://{}/robots.txt", ctx.root_url.scheme(), ctx.root_url.host_str().unwrap()).as_str(),
 				)
 				.context("cannot create robots.txt url")?;
+
 				let mut link = rt::Link::new_abs(url, String::from(""), String::from(""), 0, rt::LinkTarget::Load);
 				link.is_waker = true;
-
 				ctx.push_links(vec![link]);
+
 				self.state = RobotsTxtState::Requested;
 			}
 			return Ok(Action::Accept)
 		}
 
 		if self.state == RobotsTxtState::Decided {
-			if let Some(_matcher) = &self.matcher {}
+			if let Some(ref mut matcher) = &mut self.matcher {
+				if !matcher.one_agent_allowed_by_robots(
+					ctx.settings.user_agent.as_deref().unwrap_or(""),
+					task.link.url.as_str(),
+				) {
+					trace!("robots.txt resolved(loaded): SKIPPING");
+					return Ok(Action::Skip)
+				}
+				trace!("robots.txt resolved(loaded): ACCEPTING");
+				return Ok(Action::Accept)
+			}
 
+			trace!("robots.txt resolved(not loaded): ACCEPTING");
+			return Ok(Action::Accept)
+		}
+
+		if task.link.url.as_str().ends_with("/robots.txt") {
 			return Ok(Action::Accept)
 		}
 
