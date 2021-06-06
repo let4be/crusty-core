@@ -449,8 +449,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
 			JobStatus::Processing(Ok(ref r)) => {
 				write!(
 					f,
-					"{} {} {} (load: {}) | (follow: {})",
-					r.resolve_data, r.head_status, r.status, r.load, r.follow
+					"{} {} {} (load: {}) | (follow: {}) {}",
+					r.resolve_data, r.head_status, r.status, r.load, r.follow, self.task
 				)
 			}
 			JobStatus::Processing(Err(ref err)) => {
