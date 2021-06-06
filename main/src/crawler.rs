@@ -114,6 +114,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 		let options = &self.options;
 		let mut task_filters: TaskFilters<JS, TS> = vec![
 			Box::new(task_filters::MaxRedirect::new(options.max_redirect)),
+			Box::new(task_filters::SkipNoFollowLinks::new()),
 			Box::new(task_filters::SelectiveTaskFilter::new(
 				// this filter is enabled only for links that we follow(either directly with get or with head+get)
 				vec![LinkTarget::Follow, LinkTarget::HeadFollow],

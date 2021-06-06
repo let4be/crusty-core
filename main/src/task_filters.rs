@@ -88,6 +88,9 @@ pub struct RobotsTxt {
 	matcher:     Option<robotstxt::matcher::CachingRobotsMatcher<robotstxt::matcher::LongestMatchRobotsMatchStrategy>>,
 }
 
+#[derive(Default)]
+pub struct SkipNoFollowLinks {}
+
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SameDomain {
 	name! {}
 
@@ -292,5 +295,24 @@ impl RobotsTxt {
 
 	pub fn new() -> Self {
 		Self::default()
+	}
+}
+
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SkipNoFollowLinks {
+	name! {}
+
+	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
+		if task.link.rel.to_lowercase() == "no-follow" {
+			return Ok(Action::Skip)
+		}
+		Ok(Action::Accept)
+	}
+}
+
+impl SkipNoFollowLinks {
+	struct_name! {}
+
+	pub fn new() -> Self {
+		Self {}
 	}
 }
