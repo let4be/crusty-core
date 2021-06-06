@@ -138,6 +138,7 @@ pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 #[derive(Clone)]
 pub struct Link {
 	pub url:             Url,
+	pub rel:             String,
 	pub alt:             String,
 	pub text:            String,
 	pub redirect:        usize,
@@ -329,9 +330,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 
 impl Link {
 	pub(crate) fn new(
-		href: String,
-		alt: String,
-		text: String,
+		href: &str,
+		rel: &str,
+		alt: &str,
+		text: &str,
 		redirect: usize,
 		target: LinkTarget,
 		parent: &Link,
@@ -345,17 +347,33 @@ impl Link {
 				.with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))?,
 		);
 
-		Ok(Self { url, alt: alt.trim().to_string(), text: text.trim().to_string(), redirect, target, is_waker: false })
+		Ok(Self {
+			url,
+			rel: String::from(rel),
+			alt: alt.trim().to_string(),
+			text: text.trim().to_string(),
+			redirect,
+			target,
+			is_waker: false,
+		})
 	}
 
-	pub(crate) fn new_abs(href: Url, alt: String, text: String, redirect: usize, target: LinkTarget) -> Self {
-		Self { url: href, alt, text, redirect, target, is_waker: false }
+	pub(crate) fn new_abs(href: Url, rel: &str, alt: &str, text: &str, redirect: usize, target: LinkTarget) -> Self {
+		Self {
+			url: href,
+			rel: String::from(rel),
+			alt: alt.trim().to_string(),
+			text: text.trim().to_string(),
+			redirect,
+			target,
+			is_waker: false,
+		}
 	}
 }
 
 impl Task {
 	pub(crate) fn new_root(url: &Url) -> Result<Task> {
-		let link = Arc::new(Link::new_abs(url.clone(), "".into(), "".into(), 0, LinkTarget::Follow));
+		let link = Arc::new(Link::new_abs(url.clone(), "", "", "", 0, LinkTarget::Follow));
 
 		Ok(Task { queued_at: Instant::now(), link, level: 0 })
 	}

@@ -35,9 +35,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for Follo
 			.find(select::predicate::Name("a"))
 			.filter_map(|n| {
 				rt::Link::new(
-					String::from(n.attr("href").unwrap_or("")),
-					String::from(n.attr("alt").unwrap_or("")),
-					n.text(),
+					n.attr("href").unwrap_or(""),
+					n.attr("rel").unwrap_or(""),
+					n.attr("alt").unwrap_or(""),
+					&n.text(),
 					0,
 					self.link_target,
 					&task.link,
@@ -76,9 +77,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for LoadI
 			.find(select::predicate::Name("img"))
 			.filter_map(|n| {
 				rt::Link::new(
-					String::from(n.attr("src").unwrap_or("")),
-					String::from(n.attr("alt").unwrap_or("")),
-					n.text(),
+					n.attr("src").unwrap_or(""),
+					n.attr("rel").unwrap_or(""),
+					n.attr("alt").unwrap_or(""),
+					&n.text(),
 					0,
 					self.link_target,
 					&task.link,

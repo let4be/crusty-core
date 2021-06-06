@@ -61,15 +61,8 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 			.to_str()
 			.context("cannot read location value")?;
 
-		let link = rt::Link::new(
-			String::from(location),
-			String::from(""),
-			String::from(""),
-			task.link.redirect + 1,
-			task.link.target,
-			&task.link,
-		)
-		.context("cannot create link")?;
+		let link = rt::Link::new(&location, "", "", "", task.link.redirect + 1, task.link.target, &task.link)
+			.context("cannot create link")?;
 
 		ctx.push_links(vec![link]);
 		Ok(())

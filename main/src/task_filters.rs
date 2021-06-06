@@ -246,7 +246,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				)
 				.context("cannot create robots.txt url")?;
 
-				let mut link = rt::Link::new_abs(url, String::from(""), String::from(""), 0, rt::LinkTarget::Load);
+				let mut link = rt::Link::new_abs(url, "", "", "", 0, rt::LinkTarget::Load);
 				link.is_waker = true;
 				ctx.push_links(vec![link]);
 
