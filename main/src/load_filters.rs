@@ -25,14 +25,22 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		&self,
 		ctx: &rt::JobCtx<JS, TS>,
 		task: &rt::Task,
-		_status: &rt::HttpStatus,
+		status: &rt::HttpStatus,
 		mut reader: Box<dyn io::Read + Sync + Send>,
 	) -> Result {
 		if task.link.url.as_str().ends_with("robots.txt") {
-			let mut content = String::from("");
-			let _ = reader.read_to_string(&mut content).context("cannot read robots.txt")?;
+			let content_type = status
+				.headers
+				.get(http::header::CONTENT_TYPE)
+				.map(|v| v.to_str())
+				.unwrap_or_else(|| Ok(""))
+				.unwrap_or("");
+			if content_type.to_lowercase() == "text/plain" {
+				let mut content = String::from("");
+				let _ = reader.read_to_string(&mut content).context("cannot read robots.txt")?;
 
-			ctx.shared.lock().unwrap().insert(String::from("robots"), Box::new(content));
+				ctx.shared.lock().unwrap().insert(String::from("robots"), Box::new(content));
+			}
 		}
 
 		Ok(())
