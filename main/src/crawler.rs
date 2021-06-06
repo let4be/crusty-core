@@ -121,10 +121,6 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 			)),
 		];
 
-		if options.robots_txt {
-			task_filters.push(Box::new(task_filters::RobotsTxt::new()))
-		}
-
 		task_filters.push(Box::new(task_filters::HashSetDedup::new()));
 		if let Some(page_budget) = options.page_budget {
 			task_filters.push(Box::new(task_filters::TotalPageBudget::new(page_budget)))
@@ -134,6 +130,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 		}
 		if let Some(max_level) = options.max_level {
 			task_filters.push(Box::new(task_filters::PageLevel::new(max_level)))
+		}
+
+		if options.robots_txt {
+			task_filters.push(Box::new(task_filters::RobotsTxt::new()))
 		}
 
 		for e in &self.custom_task_filter {

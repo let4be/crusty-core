@@ -277,7 +277,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		}
 
 		self.link_buffer.push((*task.link).clone());
-		Ok(Action::Skip)
+		Ok(Action::Accept)
 	}
 }
 
