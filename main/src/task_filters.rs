@@ -1,3 +1,5 @@
+use robotstxt_with_cache as robotstxt;
+
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
 use crate::{types as rt, types::ExtError};
@@ -223,8 +225,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 	fn wake(&mut self, ctx: &mut rt::JobCtx<JS, TS>) {
 		if let Some(robots) = ctx.shared.lock().unwrap().get("robots") {
 			if let Some(robots) = robots.downcast_ref::<String>() {
-				self.matcher =
-					Some(robotstxt::matcher::CachingRobotsMatcher::new(robotstxt::DefaultMatcher::default(), robots));
+				let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
+				matcher.parse(&robots);
+				self.matcher = Some(matcher);
 			}
 		}
 
