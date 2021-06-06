@@ -1,3 +1,5 @@
+use std::panic;
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
@@ -22,8 +24,8 @@ pub(crate) trait ClientFactory<R: Resolver> {
 
 pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
 	job:            ResolvedJob<JS, TS>,
-	status_filters: StatusFilters<JS, TS>,
-	load_filters:   LoadFilters<JS, TS>,
+	status_filters: Arc<StatusFilters<JS, TS>>,
+	load_filters:   Arc<LoadFilters<JS, TS>>,
 	task_expanders: Arc<TaskExpanders<JS, TS>>,
 	term_on_error:  bool,
 
@@ -45,8 +47,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		term_on_error: bool,
 	) -> TaskProcessor<JS, TS, R> {
 		TaskProcessor {
-			status_filters: job.rules.status_filters(),
-			load_filters: job.rules.load_filters(),
+			status_filters: Arc::new(job.rules.status_filters()),
+			load_filters: Arc::new(job.rules.load_filters()),
 			task_expanders: Arc::new(job.rules.task_expanders()),
 			term_on_error,
 			job,
@@ -127,8 +129,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			metrics:    status_metrics,
 		};
 
-		for filter in self.status_filters.iter() {
-			let r = filter.accept(&mut self.job.ctx, &task, &status);
+		let status_filters = Arc::clone(&self.status_filters);
+
+		for filter in status_filters.iter() {
+			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter.accept(&mut self.job.ctx, &task, &status)))
+				.map_err(|err| Error::TaskExpanderTermByPanic {
+				name:   filter.name(),
+				source: anyhow!("{:?}", err),
+			})?;
+
 			match r {
 				Err(ExtError::Term) => return Err(Error::StatusFilterTerm { name: filter.name() }),
 				Err(ExtError::Other(err)) => {
@@ -164,7 +173,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 		load_metrics.duration = status.started_at.elapsed();
 
 		for filter in self.load_filters.iter() {
-			let r = filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()));
+			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+				filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()))
+			}))
+			.map_err(|err| Error::TaskExpanderTermByPanic { name: filter.name(), source: anyhow!("{:?}", err) })?;
+
 			match r {
 				Err(ExtError::Term) => return Err(Error::LoadFilterTerm { name: filter.name() }),
 				Err(ExtError::Other(err)) => {
@@ -206,7 +219,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 				let document = select::document::Document::from_read(reader).context("cannot read html document")?;
 
 				for expander in task_expanders.iter() {
-					match expander.expand(&mut job_ctx, &task, &status, &document) {
+					let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+						expander.expand(&mut job_ctx, &task, &status, &document)
+					}))
+					.map_err(|err| Error::TaskExpanderTermByPanic {
+						name:   expander.name(),
+						source: anyhow!("{:?}", err),
+					})?;
+
+					match r {
 						Ok(_) => {}
 						Err(ExtError::Term) => return Err(Error::TaskExpanderTerm { name: expander.name() }),
 						Err(ExtError::Other(err)) => {

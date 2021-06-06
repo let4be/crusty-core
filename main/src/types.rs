@@ -80,6 +80,12 @@ pub enum Error {
 		#[source]
 		source: anyhow::Error,
 	},
+	#[error("terminated by panic in status filter {name:?}")]
+	StatusFilterTermByPanic {
+		name:   String,
+		#[source]
+		source: anyhow::Error,
+	},
 	#[error("terminated by load filter {name:?}")]
 	LoadFilterTerm { name: String },
 	#[error("terminated by error in load filter(term_by_error=true) {name:?}")]
@@ -88,10 +94,22 @@ pub enum Error {
 		#[source]
 		source: anyhow::Error,
 	},
+	#[error("terminated by panic in load filter {name:?}")]
+	LoadFilterTermByPanic {
+		name:   String,
+		#[source]
+		source: anyhow::Error,
+	},
 	#[error("terminated by task expander {name:?}")]
 	TaskExpanderTerm { name: String },
 	#[error("terminated by error in task expander(term_by_error=true) {name:?}")]
 	TaskExpanderTermByError {
+		name:   String,
+		#[source]
+		source: anyhow::Error,
+	},
+	#[error("terminated by panic in task expander {name:?}")]
+	TaskExpanderTermByPanic {
 		name:   String,
 		#[source]
 		source: anyhow::Error,

@@ -18,6 +18,7 @@ serde = {version = "~1.0.125", features = ["derive"] }
 tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
 hyper = {version = "~0.14.7", features = ["http1", "http2", "client"] }
 robotstxt-with-cache  = {version = "~0.4.0"}
+#backoff = {version = "~0.3.0", features = ["tokio", "futures"] }
 
 trust-dns-resolver = "~0.20.2"
 hyper-tls = "~0.5.0"
