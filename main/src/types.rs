@@ -18,6 +18,7 @@ pub type BoxedTaskExpander<JS, TS> = BoxedFn<dyn task_expanders::Expander<JS, TS
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
 	pub url:       url::Url,
+	pub addrs:     Option<Vec<SocketAddr>>,
 	pub settings:  config::CrawlingSettings,
 	pub rules:     Box<dyn JobRules<JS, TS>>,
 	pub job_state: JS,
@@ -32,13 +33,19 @@ impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
 	) -> anyhow::Result<Job<JS, TS>> {
 		let url = Url::parse(url).context("cannot parse url")?;
 
-		Ok(Self { url, settings, rules: Box::new(rules), job_state })
+		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state })
+	}
+
+	pub fn with_addrs(mut self, addrs: Vec<SocketAddr>) -> Self {
+		self.addrs = Some(addrs);
+		self
 	}
 }
 
 #[derive(Clone)]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
 	pub url:      url::Url,
+	pub addrs:    Option<Vec<SocketAddr>>,
 	pub settings: Arc<config::CrawlingSettings>,
 	pub rules:    Arc<Box<dyn JobRules<JS, TS>>>,
 	pub ctx:      JobCtx<JS, TS>,
@@ -50,6 +57,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<
 		let settings = Arc::new(job.settings);
 		ResolvedJob {
 			url:      job.url.clone(),
+			addrs:    job.addrs,
 			settings: Arc::clone(&settings),
 			rules:    Arc::new(job.rules),
 			ctx:      JobCtx::new(job.url, settings, job.job_state, TS::default()),

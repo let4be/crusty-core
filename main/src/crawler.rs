@@ -1,9 +1,11 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
 use crate::{
-	config, hyper_utils, load_filters,
+	config,
+	config::ResolvedNetworkingProfile,
+	hyper_utils, load_filters,
 	parser_processor::{Handle, ParserProcessor},
-	resolver::{Adaptor, AsyncHyperResolver, Resolver},
+	resolver::{Adaptor, AsyncHyperResolver, AsyncStaticResolver, Resolver},
 	status_filters, task_expanders, task_filters,
 	task_processor::*,
 	task_scheduler::*,
@@ -343,8 +345,20 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
 
 	async fn process(self) -> Result<()> {
 		while let Ok(job) = self.job_rx.recv_async().await {
-			let crawler = Crawler::_new(self.networking_profile.clone(), self.parse_tx.clone());
-			let _ = crawler.go(job, self.update_tx.clone()).await;
+			let np = self.networking_profile.clone();
+
+			if job.addrs.is_some() {
+				let npr = ResolvedNetworkingProfile {
+					values:   np.values,
+					resolver: Arc::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone())),
+				};
+
+				let crawler = Crawler::_new(npr, self.parse_tx.clone());
+				let _ = crawler.go(job, self.update_tx.clone()).await;
+			} else {
+				let crawler = Crawler::_new(np, self.parse_tx.clone());
+				let _ = crawler.go(job, self.update_tx.clone()).await;
+			}
 		}
 		Ok(())
 	}

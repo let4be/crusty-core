@@ -21,6 +21,12 @@ pub trait Resolver: Clone + Send + Sync + 'static {
 }
 
 #[derive(Clone, Debug)]
+pub struct AsyncStaticResolver {
+	addrs:         Vec<SocketAddr>,
+	net_blacklist: Arc<Vec<IpNet>>,
+}
+
+#[derive(Clone, Debug)]
 pub struct AsyncHyperResolver {
 	resolver:      Arc<TokioAsyncResolver>,
 	net_blacklist: Arc<Vec<IpNet>>,
@@ -30,6 +36,12 @@ impl AsyncHyperResolver {
 	pub fn new(config: ResolverConfig, options: ResolverOpts) -> Result<Self, io::Error> {
 		let resolver = Arc::new(TokioAsyncResolver::tokio(config, options)?);
 		Ok(Self { resolver, net_blacklist: Arc::new(vec![]) })
+	}
+}
+
+impl AsyncStaticResolver {
+	pub fn new(addrs: Vec<SocketAddr>) -> Self {
+		Self { addrs, net_blacklist: Arc::new(vec![]) }
 	}
 }
 
@@ -72,6 +84,40 @@ impl Resolver for AsyncHyperResolver {
 					}
 				}
 				out_addrs.push(addr);
+			}
+
+			Ok(out_addrs.into_iter())
+		})
+	}
+}
+
+impl Resolver for AsyncStaticResolver {
+	fn new_default() -> Result<Self, io::Error> {
+		panic!("noop")
+	}
+
+	fn with_net_blacklist(mut self, blacklist: Arc<Vec<IpNet>>) -> Self {
+		self.net_blacklist = blacklist;
+		self
+	}
+
+	fn resolve(&self, _name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
+		let resolver = self.clone();
+
+		Box::pin(async move {
+			let r = resolver.addrs.into_iter();
+
+			let mut out_addrs: Vec<SocketAddr> = vec![];
+			for a in r.into_iter() {
+				for blacklisted_net in resolver.net_blacklist.iter() {
+					if blacklisted_net.contains(&a.ip()) {
+						return Err(io::Error::new(
+							io::ErrorKind::Interrupted,
+							format!("resolved IP {} is blacklisted", a.ip().to_string().as_str()),
+						))
+					}
+				}
+				out_addrs.push(a);
 			}
 
 			Ok(out_addrs.into_iter())
