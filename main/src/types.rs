@@ -68,7 +68,7 @@ pub type BoxedJobRules<JS, TS> = Box<dyn JobRules<JS, TS>>;
 
 #[derive(Error, Debug)]
 pub enum Error {
-	#[error(transparent)]
+	#[error("something went wrong")]
 	Other(#[from] anyhow::Error),
 	#[error("timeout during loading")]
 	LoadTimeout,
@@ -430,7 +430,7 @@ impl fmt::Display for StatusResult {
 				)
 			}
 			StatusResult::Err(ref err) => {
-				write!(f, "[err]: {}", err.to_string())
+				write!(f, "[err]: {:#}", err)
 			}
 			_ => {
 				write!(f, "")
@@ -453,7 +453,7 @@ impl fmt::Display for LoadResult {
 				)
 			}
 			LoadResult::Err(ref err) => {
-				write!(f, "[err loading]: {}", err.to_string())
+				write!(f, "[err loading]: {:#}", err)
 			}
 			_ => {
 				write!(f, "none")
@@ -470,7 +470,7 @@ impl fmt::Display for FollowResult {
 				write!(f, "parsed {}ms", m.duration.as_millis())
 			}
 			FollowResult::Err(ref err) => {
-				write!(f, "[err following]: {}", err.to_string())
+				write!(f, "[err following]: {:#}", err)
 			}
 			_ => {
 				write!(f, "none")
@@ -490,7 +490,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> fmt::Display for JobUpdate<JS, TS>
 				)
 			}
 			JobStatus::Processing(Err(ref err)) => {
-				write!(f, "[dns error : {:?}] {}", err, self.task)
+				write!(f, "[dns error : {:#}] {}", err, self.task)
 			}
 			JobStatus::Finished(Ok(ref r)) => {
 				write!(f, "[finished] {} {}", self.task, r)
