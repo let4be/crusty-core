@@ -133,7 +133,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 
 		for filter in status_filters.iter() {
 			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter.accept(&mut self.job.ctx, &task, &status)))
-				.map_err(|err| Error::TaskExpanderTermByPanic {
+				.map_err(|err| Error::StatusFilterTermByPanic {
 				name:   filter.name(),
 				source: anyhow!("{:?}", err),
 			})?;
@@ -176,7 +176,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
 				filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()))
 			}))
-			.map_err(|err| Error::TaskExpanderTermByPanic { name: filter.name(), source: anyhow!("{:?}", err) })?;
+			.map_err(|err| Error::LoadFilterTermByPanic { name: filter.name(), source: anyhow!("{:?}", err) })?;
 
 			match r {
 				Err(ExtError::Term) => return Err(Error::LoadFilterTerm { name: filter.name() }),
