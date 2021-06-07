@@ -70,9 +70,10 @@ pub struct MaxRedirect {
 	max_redirect: usize,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct HashSetDedup {
-	visited: std::collections::HashSet<String>,
+	visited:     Arc<Mutex<std::collections::HashSet<String>>>,
+	is_checking: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Copy)]
@@ -186,11 +187,14 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSet
 	name! {}
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
-		if self.visited.contains(task.link.url.as_str()) {
+		let mut visited = self.visited.lock().unwrap();
+		if visited.contains(task.link.url.as_str()) {
 			return Ok(Action::Skip)
 		}
 
-		self.visited.insert(task.link.url.to_string());
+		if !self.is_checking {
+			visited.insert(task.link.url.to_string());
+		}
 		Ok(Action::Accept)
 	}
 }
@@ -198,8 +202,14 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSet
 impl HashSetDedup {
 	struct_name! {}
 
-	pub fn new() -> Self {
-		Self { visited: std::collections::HashSet::new() }
+	pub fn new(is_checking: bool) -> Self {
+		Self { visited: Arc::new(Mutex::new(std::collections::HashSet::new())), is_checking }
+	}
+
+	pub fn committing(&self) -> Self {
+		let mut filter = self.clone();
+		filter.is_checking = false;
+		filter
 	}
 }
 
@@ -280,7 +290,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		}
 
 		self.link_buffer.push((*task.link).clone());
-		Ok(Action::Accept)
+		Ok(Action::Skip)
 	}
 }
 

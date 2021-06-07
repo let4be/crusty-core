@@ -122,7 +122,10 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 			)),
 		];
 
-		task_filters.push(Box::new(task_filters::HashSetDedup::new()));
+		let dedup_checking = task_filters::HashSetDedup::new(true);
+		let dedup_committing = dedup_checking.committing();
+		task_filters.push(Box::new(dedup_checking));
+
 		if let Some(page_budget) = options.page_budget {
 			task_filters.push(Box::new(task_filters::TotalPageBudget::new(page_budget)))
 		}
@@ -140,6 +143,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobRules<JS, TS> for CrawlingRules
 		for e in &self.custom_task_filter {
 			task_filters.push(e());
 		}
+
+		task_filters.push(Box::new(dedup_committing));
 		task_filters
 	}
 

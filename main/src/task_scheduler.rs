@@ -54,7 +54,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 					if task.is_root() {
 						warn!(action = "skip", filter_name = %filter.name(), action);
 					} else {
-						trace!(action = "skip", filter_name = %filter.name(), action);
+						debug!(action = "skip", filter_name = %filter.name(), action);
 					}
 					return Ok(task_filters::Action::Skip)
 				}
@@ -62,18 +62,18 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 					if task.is_root() {
 						warn!(action = "term", filter_name = %filter.name(), action);
 					} else {
-						trace!(action = "term", filter_name = %filter.name(), action);
+						debug!(action = "term", filter_name = %filter.name(), action);
 					}
 					return Err(ExtError::Term)
 				}
 				Err(ExtError::Other(err)) => {
-					trace!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
+					debug!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
 					continue
 				}
 			}
 		}
 
-		trace!(action = "scheduled", action);
+		debug!(action = "scheduled", action);
 		Ok(task_filters::Action::Accept)
 	}
 
@@ -93,28 +93,26 @@ impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
 			links.extend(r.links.clone());
 		}
 
-		if !links.is_empty() {
-			let tasks: Vec<_> = links
-				.iter()
-				.filter_map(|link| Task::new(Arc::clone(link), &task_response.task).ok())
-				.map(|mut task| (self.schedule_filter(&mut task), task))
-				.take_while(|(r, _)| {
-					if let Err(ExtError::Term) = r {
-						return false
-					}
-					true
-				})
-				.filter_map(|(r, task)| {
-					if let Ok(task_filters::Action::Skip) = r {
-						return None
-					}
-					Some(task)
-				})
-				.collect();
+		let tasks: Vec<_> = links
+			.iter()
+			.filter_map(|link| Task::new(Arc::clone(link), &task_response.task).ok())
+			.map(|mut task| (self.schedule_filter(&mut task), task))
+			.take_while(|(r, _)| {
+				if let Err(ExtError::Term) = r {
+					return false
+				}
+				true
+			})
+			.filter_map(|(r, task)| {
+				if let Ok(task_filters::Action::Skip) = r {
+					return None
+				}
+				Some(task)
+			})
+			.collect();
 
-			for task in tasks {
-				self.schedule(Arc::new(task));
-			}
+		for task in tasks {
+			self.schedule(Arc::new(task));
 		}
 
 		let _ = self.update_tx.send_async(task_response).await;
