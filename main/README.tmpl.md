@@ -16,7 +16,7 @@ If you want to get more fancy and configure some stuff or control your imports m
 Simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = "~0.33.0"
+crusty-core = "~0.35.0"
 ```
 
 ### Key capabilities
