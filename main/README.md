@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
 Simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = "~0.30.0"
+crusty-core = "~0.31.0"
 ```
 
 ### Key capabilities
