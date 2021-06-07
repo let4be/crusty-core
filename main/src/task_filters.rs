@@ -188,13 +188,15 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for HashSet
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		let mut visited = self.visited.lock().unwrap();
-		if visited.contains(task.link.url.as_str()) {
-			return Ok(Action::Skip)
+
+		if self.is_checking {
+			if visited.contains(task.link.url.as_str()) {
+				return Ok(Action::Skip)
+			}
+			return Ok(Action::Accept)
 		}
 
-		if !self.is_checking {
-			visited.insert(task.link.url.to_string());
-		}
+		visited.insert(task.link.url.to_string());
 		Ok(Action::Accept)
 	}
 }
