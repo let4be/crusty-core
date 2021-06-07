@@ -68,7 +68,7 @@ pub type BoxedJobRules<JS, TS> = Box<dyn JobRules<JS, TS>>;
 
 #[derive(Error, Debug)]
 pub enum Error {
-	#[error("something went wrong")]
+	#[error(transparent)]
 	Other(#[from] anyhow::Error),
 	#[error("timeout during loading")]
 	LoadTimeout,
