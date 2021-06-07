@@ -516,14 +516,10 @@ impl fmt::Display for JobFinished {
 
 impl fmt::Display for Task {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let mut text = self.link.text.as_str();
-		if text.len() > 32 {
-			text = &text[..32];
-		}
 		if self.level < 1 {
 			write!(f, "{} (root)", &self.link.url)
 		} else {
-			write!(f, "{} ({}) {}", &self.link.url, self.level, text)
+			write!(f, "{} ({}) {}", &self.link.url, self.level, self.link.text.chars().take(32).collect::<String>())
 		}
 	}
 }
