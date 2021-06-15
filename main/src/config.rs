@@ -140,7 +140,7 @@ impl ConcurrencyProfile {
 	}
 
 	pub fn job_update_buffer_size(&self) -> usize {
-		self.domain_concurrency
+		self.domain_concurrency * 2
 	}
 }
 
