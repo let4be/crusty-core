@@ -19,7 +19,7 @@ pub type BoxedTaskExpander<JS, TS> = BoxedFn<dyn task_expanders::Expander<JS, TS
 pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
 	pub url:       url::Url,
 	pub addrs:     Option<Vec<SocketAddr>>,
-	pub settings:  config::CrawlingSettings,
+	pub settings:  Arc<config::CrawlingSettings>,
 	pub rules:     Box<dyn JobRules<JS, TS>>,
 	pub job_state: JS,
 }
@@ -27,7 +27,7 @@ pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
 impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
 	pub fn new<R: JobRules<JS, TS>>(
 		url: &str,
-		settings: config::CrawlingSettings,
+		settings: Arc<config::CrawlingSettings>,
 		rules: R,
 		job_state: JS,
 	) -> anyhow::Result<Job<JS, TS>> {
@@ -52,15 +52,13 @@ pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
-	fn from(mut job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
-		job.settings.build();
-		let settings = Arc::new(job.settings);
+	fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
 		ResolvedJob {
 			url:      job.url.clone(),
 			addrs:    job.addrs,
-			settings: Arc::clone(&settings),
+			settings: Arc::clone(&job.settings),
 			rules:    Arc::new(job.rules),
-			ctx:      JobCtx::new(job.url, settings, job.job_state, TS::default()),
+			ctx:      JobCtx::new(job.url, job.settings, job.job_state, TS::default()),
 		}
 	}
 }

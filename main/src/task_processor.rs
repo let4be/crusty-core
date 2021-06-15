@@ -4,7 +4,6 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
 use io::Read;
-use rand::{thread_rng, Rng};
 
 #[allow(unused_imports)]
 use crate::internal_prelude::*;

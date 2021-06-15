@@ -9,25 +9,13 @@ pub struct ParserProcessor {
 	rx:               Receiver<ParserTask>,
 }
 
-pub struct Handle {
-	pub(crate) tx: Sender<ParserTask>,
-	h:             tokio::task::JoinHandle<Result<()>>,
-}
-
-impl Handle {
-	pub fn join(self) -> tokio::task::JoinHandle<Result<()>> {
-		drop(self.tx);
-		self.h
-	}
-}
-
 impl ParserProcessor {
-	pub fn spawn(concurrency_profile: config::ConcurrencyProfile, stack_size_bytes: usize) -> Handle {
+	pub fn spawn(concurrency_profile: config::ConcurrencyProfile, stack_size_bytes: usize) -> Sender<ParserTask> {
 		let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size());
 
 		let s = Self { concurrency: concurrency_profile.parser_concurrency, stack_size_bytes, rx };
-		let h = tokio::spawn(s.go());
-		Handle { tx, h }
+		let _ = tokio::spawn(s.go());
+		tx
 	}
 
 	fn process(&self, n: usize) -> PinnedTask {

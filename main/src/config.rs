@@ -136,11 +136,11 @@ impl ConcurrencyProfile {
 	}
 
 	pub fn job_tx_buffer_size(&self) -> usize {
-		self.domain_concurrency * 3
+		self.domain_concurrency * 10
 	}
 
 	pub fn job_update_buffer_size(&self) -> usize {
-		self.domain_concurrency * 3
+		self.domain_concurrency * 10
 	}
 }
 
@@ -149,8 +149,8 @@ pub struct NetworkingProfileValues {
 	pub connect_timeout:          Option<CDuration>,
 	pub socket_read_buffer_size:  Option<CBytes>,
 	pub socket_write_buffer_size: Option<CBytes>,
-	pub bind_local_ipv4:          Option<CIP4Addr>,
-	pub bind_local_ipv6:          Option<CIP6Addr>,
+	pub bind_local_ipv4:          Vec<CIP4Addr>,
+	pub bind_local_ipv6:          Vec<CIP6Addr>,
 }
 
 impl Default for NetworkingProfileValues {
@@ -159,8 +159,8 @@ impl Default for NetworkingProfileValues {
 			connect_timeout:          Some(CDuration::from_secs(5)),
 			socket_write_buffer_size: Some(CBytes(32 * 1024)),
 			socket_read_buffer_size:  Some(CBytes(32 * 1024)),
-			bind_local_ipv4:          None,
-			bind_local_ipv6:          None,
+			bind_local_ipv4:          vec![],
+			bind_local_ipv6:          vec![],
 		}
 	}
 }
@@ -249,11 +249,12 @@ impl Default for CrawlingSettings {
 			custom_headers:            HashMap::new(),
 			max_response_size:         CBytes(1024 * 1024 * 2),
 		}
+		.build_headers()
 	}
 }
 
 impl CrawlingSettings {
-	pub fn build(&mut self) {
+	pub fn build_headers(mut self) -> Self {
 		if let Some(user_agent) = &self.user_agent {
 			self.custom_headers.insert(http::header::USER_AGENT.to_string(), vec![user_agent.clone()]);
 		}
@@ -264,5 +265,6 @@ impl CrawlingSettings {
 			http::header::ACCEPT.to_string(),
 			vec!["text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9".into()],
 		);
+		self
 	}
 }

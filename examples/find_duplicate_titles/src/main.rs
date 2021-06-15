@@ -1,6 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     env, fmt,
+    sync::Arc,
 };
 
 use anyhow::anyhow;
@@ -97,10 +98,10 @@ async fn main() -> Result<()> {
 
     let concurrency_profile =
         config::ConcurrencyProfile { parser_concurrency: 2, ..config::ConcurrencyProfile::default() };
-    let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+    let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, &pp);
+    let crawler = Crawler::new(networking_profile, tx_pp);
 
     let settings = config::CrawlingSettings::default();
     let rules_options = CrawlingRulesOptions {
@@ -113,11 +114,10 @@ async fn main() -> Result<()> {
     let (update_tx, update_rx) = ch_unbounded();
     let h_sub = tokio::spawn(process_responses(update_rx));
 
-    let job = Job::new(&job_url, settings, rules, JobState::default())?;
+    let job = Job::new(&job_url, Arc::new(settings), rules, JobState::default())?;
     crawler.go(job, update_tx).await?;
     drop(crawler);
 
-    let _ = pp.join().await?;
     let _ = h_sub.await?;
     Ok(())
 }

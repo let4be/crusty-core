@@ -4,7 +4,7 @@ use crate::{
 	config,
 	config::ResolvedNetworkingProfile,
 	hyper_utils, load_filters,
-	parser_processor::{Handle, ParserProcessor},
+	parser_processor::ParserProcessor,
 	resolver::{Adaptor, AsyncHyperResolver, AsyncStaticResolver, Resolver},
 	status_filters, task_expanders, task_filters,
 	task_processor::*,
@@ -203,7 +203,29 @@ impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
 		let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
 		http.set_connect_timeout(v.connect_timeout.clone().map(|v| *v));
 
-		match (v.bind_local_ipv4.map(|v| *v), v.bind_local_ipv6.map(|v| *v)) {
+		let bind_local_ipv4 = if !v.bind_local_ipv4.is_empty() {
+			if v.bind_local_ipv4.len() == 1 {
+				Some(*v.bind_local_ipv4[0])
+			} else {
+				let mut rng = thread_rng();
+				Some(*v.bind_local_ipv4[rng.gen_range(0..v.bind_local_ipv4.len())])
+			}
+		} else {
+			None
+		};
+
+		let bind_local_ipv6 = if !v.bind_local_ipv6.is_empty() {
+			if v.bind_local_ipv6.len() == 1 {
+				Some(*v.bind_local_ipv6[0])
+			} else {
+				let mut rng = thread_rng();
+				Some(*v.bind_local_ipv6[rng.gen_range(0..v.bind_local_ipv6.len())])
+			}
+		} else {
+			None
+		};
+
+		match (bind_local_ipv4, bind_local_ipv6) {
 			(Some(ipv4), Some(ipv6)) => http.set_local_addresses(ipv4, ipv6),
 			(Some(ipv4), None) => http.set_local_address(Some(IpAddr::V4(ipv4))),
 			(None, Some(ipv6)) => http.set_local_address(Some(IpAddr::V6(ipv6))),
@@ -249,20 +271,16 @@ impl<JS: JobStateValues, TS: TaskStateValues> CrawlerIter<JS, TS> {
 impl Crawler<AsyncHyperResolver> {
 	pub fn new_default() -> anyhow::Result<Crawler<AsyncHyperResolver>> {
 		let concurrency_profile = config::ConcurrencyProfile::default();
-		let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+		let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
 		let networking_profile = config::NetworkingProfile::default().resolve()?;
-		Ok(Crawler::new(networking_profile, &pp))
+		Ok(Crawler::new(networking_profile, tx_pp))
 	}
 }
 
 impl<R: Resolver> Crawler<R> {
-	pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, pp: &Handle) -> Crawler<R> {
-		Self::_new(networking_profile, pp.tx.clone())
-	}
-
-	pub fn _new(networking_profile: config::ResolvedNetworkingProfile<R>, parse_tx: Sender<ParserTask>) -> Crawler<R> {
-		Crawler { networking_profile, parse_tx }
+	pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, tx_pp: Sender<ParserTask>) -> Crawler<R> {
+		Crawler { networking_profile, parse_tx: tx_pp }
 	}
 
 	pub fn iter<JS: JobStateValues, TS: TaskStateValues>(self, job: Job<JS, TS>) -> CrawlerIter<JS, TS> {
@@ -330,14 +348,14 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
 pub type MultiCrawlerTuple<JS, TS, R> = (MultiCrawler<JS, TS, R>, Sender<Job<JS, TS>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, R> {
 	pub fn new(
-		pp_h: &Handle,
+		tx_pp: Sender<ParserTask>,
 		concurrency_profile: config::ConcurrencyProfile,
 		networking_profile: config::ResolvedNetworkingProfile<R>,
 	) -> MultiCrawlerTuple<JS, TS, R> {
 		let (job_tx, job_rx) = bounded_ch::<Job<JS, TS>>(concurrency_profile.job_tx_buffer_size());
 		let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
 		(
-			MultiCrawler { job_rx, update_tx, parse_tx: pp_h.tx.clone(), concurrency_profile, networking_profile },
+			MultiCrawler { job_rx, update_tx, parse_tx: tx_pp, concurrency_profile, networking_profile },
 			job_tx,
 			update_rx,
 		)
@@ -348,15 +366,15 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> MultiCrawler<JS, TS, 
 			let np = self.networking_profile.clone();
 
 			if job.addrs.is_some() {
-				let npr = ResolvedNetworkingProfile {
+				let np_static = ResolvedNetworkingProfile {
 					values:   np.values,
 					resolver: Arc::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone())),
 				};
 
-				let crawler = Crawler::_new(npr, self.parse_tx.clone());
+				let crawler = Crawler::new(np_static, self.parse_tx.clone());
 				let _ = crawler.go(job, self.update_tx.clone()).await;
 			} else {
-				let crawler = Crawler::_new(np, self.parse_tx.clone());
+				let crawler = Crawler::new(np, self.parse_tx.clone());
 				let _ = crawler.go(job, self.update_tx.clone()).await;
 			}
 		}

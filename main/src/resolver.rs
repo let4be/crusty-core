@@ -35,6 +35,7 @@ pub struct AsyncHyperResolver {
 impl AsyncHyperResolver {
 	pub fn new(config: ResolverConfig, options: ResolverOpts) -> Result<Self, io::Error> {
 		let resolver = Arc::new(TokioAsyncResolver::tokio(config, options)?);
+
 		Ok(Self { resolver, net_blacklist: Arc::new(vec![]) })
 	}
 }

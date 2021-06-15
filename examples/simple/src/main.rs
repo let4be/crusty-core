@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crusty_core::{
     config,
     select::{document::Document, predicate::Name},
@@ -32,16 +34,16 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let concurrency_profile = config::ConcurrencyProfile::default();
-    let pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+    let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, &pp);
+    let crawler = Crawler::new(networking_profile, tx_pp);
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
     let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor {});
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
+    let job = Job::new("https://example.com", Arc::new(settings), rules, JobState::default())?;
     for r in crawler.iter(job) {
         println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
@@ -49,5 +51,5 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    Ok(pp.join().await??)
+    Ok(())
 }
