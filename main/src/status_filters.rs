@@ -5,17 +5,17 @@ use crate::types as rt;
 pub type Result = rt::ExtResult<()>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
-	fn name(&self) -> String {
-		String::from("no name")
+	fn name(&self) -> &'static str {
+		"no name"
 	}
 	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> Result;
 }
 
-pub struct ContentType {
-	accepted: Vec<String>,
+pub struct ContentType<'a> {
+	accepted: Vec<&'a str>,
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for ContentType {
+impl<'a, JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for ContentType<'a> {
 	name! {}
 
 	fn accept(&self, _ctx: &mut rt::JobCtx<JS, TS>, _task: &rt::Task, status: &rt::HttpStatus) -> Result {
@@ -34,10 +34,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Content
 	}
 }
 
-impl ContentType {
+impl<'a> ContentType<'a> {
 	struct_name! {}
 
-	pub fn new(accepted: Vec<String>) -> Self {
+	pub fn new(accepted: Vec<&'a str>) -> Self {
 		Self { accepted }
 	}
 }

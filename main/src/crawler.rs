@@ -19,7 +19,7 @@ pub struct CrawlingRulesOptions {
 	pub page_budget:            Option<usize>,
 	pub links_per_page_budget:  Option<usize>,
 	pub max_level:              Option<usize>,
-	pub accepted_content_types: Option<Vec<String>>,
+	pub accepted_content_types: Option<Vec<&'static str>>,
 	pub robots_txt:             bool,
 }
 
@@ -31,7 +31,7 @@ impl Default for CrawlingRulesOptions {
 			page_budget:            Some(50),
 			links_per_page_budget:  Some(50),
 			max_level:              Some(10),
-			accepted_content_types: Some(vec![String::from("text/html"), String::from("text/plain")]),
+			accepted_content_types: Some(vec!["text/html", "text/plain"]),
 			robots_txt:             true,
 		}
 	}

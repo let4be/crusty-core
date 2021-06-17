@@ -16,8 +16,8 @@ use crate::internal_prelude::*;
 
 pub trait Resolver: Clone + Send + Sync + 'static {
 	fn new_default() -> Result<Self, io::Error>;
-	fn resolve(&self, host: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>>;
 	fn with_net_blacklist(self, blacklist: Arc<Vec<IpNet>>) -> Self;
+	fn resolve<T: ToString>(&self, host: T) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>>;
 }
 
 #[derive(Clone, Debug)]
@@ -57,14 +57,14 @@ impl Resolver for AsyncHyperResolver {
 		self
 	}
 
-	fn resolve(&self, name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
+	fn resolve<T: ToString>(&self, name: T) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
 		let resolver = self.clone();
-		let s_name = String::from(name);
 
+		let name = name.to_string();
 		Box::pin(async move {
 			let r = resolver
 				.resolver
-				.lookup_ip(s_name.as_str())
+				.lookup_ip(name.as_str())
 				.await?
 				.iter()
 				.map(|addr| (addr, 0_u16).to_socket_addrs())
@@ -102,7 +102,7 @@ impl Resolver for AsyncStaticResolver {
 		self
 	}
 
-	fn resolve(&self, _name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
+	fn resolve<T: ToString>(&self, _name: T) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
 		let resolver = self.clone();
 
 		Box::pin(async move {

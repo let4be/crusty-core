@@ -42,8 +42,8 @@ pub struct TaskState {
 }
 pub struct DataExtractor {}
 impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
-    fn name(&self) -> String {
-        String::from("My Fancy Data Extractor With Fancy Name")
+    fn name(&self) -> &'static str {
+        "My Fancy Data Extractor With Fancy Name"
     }
 
     fn expand(

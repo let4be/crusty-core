@@ -1,9 +1,6 @@
 // black magic purification...
-pub fn purify_struct_name(s: &str) -> String {
-	let s = String::from(s);
-	let name = s.split("::").collect::<Vec<&str>>().into_iter().rev().take(2).rev().next().unwrap_or("");
-
-	String::from(name)
+pub fn purify_struct_name(s: &'static str) -> &'static str {
+	s.split("::").collect::<Vec<_>>().into_iter().rev().take(2).rev().next().unwrap_or("")
 }
 
 #[macro_export]
@@ -22,7 +19,7 @@ macro_rules! function {
 #[macro_export]
 macro_rules! struct_name {
 	() => {
-		fn _name() -> String {
+		fn _name() -> &'static str {
 			$crate::macro_helpers::purify_struct_name(function!())
 		}
 	};
@@ -32,7 +29,7 @@ macro_rules! struct_name {
 #[macro_export]
 macro_rules! name {
 	() => {
-		fn name(&self) -> String {
+		fn name(&self) -> &'static str {
 			Self::_name()
 		}
 	};

@@ -97,44 +97,44 @@ pub enum Error {
 	#[error("timeout during loading")]
 	LoadTimeout,
 	#[error("terminated by status filter {name:?}")]
-	StatusFilterTerm { name: String },
+	StatusFilterTerm { name: &'static str },
 	#[error("terminated by error in status filter(term_by_error=true) {name:?}")]
 	StatusFilterTermByError {
-		name:   String,
+		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},
 	#[error("terminated by panic in status filter {name:?}")]
 	StatusFilterTermByPanic {
-		name:   String,
+		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},
 	#[error("terminated by load filter {name:?}")]
-	LoadFilterTerm { name: String },
+	LoadFilterTerm { name: &'static str },
 	#[error("terminated by error in load filter(term_by_error=true) {name:?}")]
 	LoadFilterTermByError {
-		name:   String,
+		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},
 	#[error("terminated by panic in load filter {name:?}")]
 	LoadFilterTermByPanic {
-		name:   String,
+		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},
 	#[error("terminated by task expander {name:?}")]
-	TaskExpanderTerm { name: String },
+	TaskExpanderTerm { name: &'static str },
 	#[error("terminated by error in task expander(term_by_error=true) {name:?}")]
 	TaskExpanderTermByError {
-		name:   String,
+		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},
 	#[error("terminated by panic in task expander {name:?}")]
 	TaskExpanderTermByPanic {
-		name:   String,
+		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},

@@ -5,8 +5,8 @@ use crate::types as rt;
 pub type Result = rt::ExtResult<()>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
-	fn name(&self) -> String {
-		String::from("no name")
+	fn name(&self) -> &'static str {
+		"no name"
 	}
 	fn accept(
 		&self,

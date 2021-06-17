@@ -13,8 +13,8 @@ pub type Result = rt::ExtResult<Action>;
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	// filter can have an optional name
-	fn name(&self) -> String {
-		String::from("no name")
+	fn name(&self) -> &'static str {
+		"no name"
 	}
 	// filters can be waked when a task with Link.waked is considered finished by a scheduler
 	fn wake(&mut self, _ctx: &mut rt::JobCtx<JS, TS>) {}
@@ -34,7 +34,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> SelectiveTaskFilter<JS, TS
 }
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for SelectiveTaskFilter<JS, TS> {
-	fn name(&self) -> String {
+	fn name(&self) -> &'static str {
 		self.filter.name()
 	}
 
@@ -113,11 +113,11 @@ impl SameDomain {
 	struct_name! {}
 
 	pub fn new(www_allow: bool) -> Self {
-		let mut strip_prefix = String::from("");
+		let mut strip_prefix = "";
 		if www_allow {
-			strip_prefix = String::from("www.");
+			strip_prefix = "www.";
 		}
-		Self { strip_prefix }
+		Self { strip_prefix: String::from(strip_prefix) }
 	}
 }
 
