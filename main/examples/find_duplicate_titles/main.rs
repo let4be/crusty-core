@@ -1,7 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     env, fmt,
-    sync::Arc,
 };
 
 use anyhow::anyhow;
@@ -111,7 +110,7 @@ async fn main() -> Result<()> {
     let (update_tx, update_rx) = ch_unbounded();
     let h_sub = tokio::spawn(process_responses(update_rx));
 
-    let job = Job::new(&job_url, Arc::new(settings), rules, JobState::default())?;
+    let job = Job::new(&job_url, settings, rules, JobState::default())?;
     crawler.go(job, update_tx).await?;
     drop(crawler);
 

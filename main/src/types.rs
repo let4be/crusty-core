@@ -43,6 +43,15 @@ pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> {
 	pub fn new<R: JobRules<JS, TS, P>>(
 		url: &str,
+		settings: config::CrawlingSettings,
+		rules: R,
+		job_state: JS,
+	) -> anyhow::Result<Job<JS, TS, P>> {
+		Self::new_with_shared_settings(url, Arc::new(settings), rules, job_state)
+	}
+
+	pub fn new_with_shared_settings<R: JobRules<JS, TS, P>>(
+		url: &str,
 		settings: Arc<config::CrawlingSettings>,
 		rules: R,
 		job_state: JS,
