@@ -12,13 +12,13 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
-impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
     fn expand(
         &self,
         ctx: &mut Ctx,
         _: &Task,
         _: &HttpStatus,
-        doc: &SelectDocument,
+        doc: &Document,
     ) -> task_expanders::Result {
         if let Some(title) = doc.find(Name("title")).next().map(|v| v.text()) {
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
@@ -33,7 +33,8 @@ async fn main() -> anyhow::Result<()> {
     let crawler = Crawler::new_default()?;
 
     let settings = config::CrawlingSettings::default();
-    let rules = CrawlingRules::default().with_task_expander(|| DataExtractor {});
+    let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
+        .with_task_expander(|| DataExtractor {});
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {

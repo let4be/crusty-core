@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use crusty_core::{prelude::*, task_expanders::FollowLinks};
+use crusty_core::{prelude::*, select_task_expanders::FollowLinks};
 use tracing::{info, Level};
 
 type Result<T> = anyhow::Result<T>;
@@ -46,7 +46,7 @@ pub struct TaskState {
     title: String,
 }
 pub struct DataExtractor {}
-impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
     fn name(&self) -> &'static str {
         "My Fancy Data Extractor With Fancy Name"
     }
@@ -56,7 +56,7 @@ impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
         ctx: &mut JobCtx<JobState, TaskState>,
         task: &Task,
         _: &HttpStatus,
-        doc: &SelectDocument,
+        doc: &Document,
     ) -> task_expanders::Result {
         let title = doc
             .find(Name("title"))
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
     let settings = config::CrawlingSettings::default();
     let rules_options =
         CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
-    let rules = CrawlingRules::new(rules_options, select_document_parser())
+    let rules = CrawlingRules::new(rules_options, document_parser())
         .with_task_expander(|| DataExtractor {})
         .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 

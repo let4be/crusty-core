@@ -1,8 +1,9 @@
 use crusty_core::{
     config,
     select::predicate::Name,
-    select_document_parser, task_expanders,
-    types::{HttpStatus, Job, JobCtx, JobStatus, SelectDocument, Task},
+    select_task_expanders::{document_parser, Document},
+    task_expanders,
+    types::{HttpStatus, Job, JobCtx, JobStatus, Task},
     Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };
 
@@ -18,13 +19,13 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
-impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
     fn expand(
         &self,
         ctx: &mut Ctx,
         _: &Task,
         _: &HttpStatus,
-        doc: &SelectDocument,
+        doc: &Document,
     ) -> task_expanders::Result {
         let title = doc.find(Name("title")).next().map(|v| v.text());
         if let Some(title) = title {
@@ -45,8 +46,8 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
-    let rules = CrawlingRules::new(rules_opt, select_document_parser())
-        .with_task_expander(|| DataExtractor {});
+    let rules =
+        CrawlingRules::new(rules_opt, document_parser()).with_task_expander(|| DataExtractor {});
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {

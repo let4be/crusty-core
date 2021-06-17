@@ -9,6 +9,23 @@ license = "GPL-3.0"
 repository = "https://github.com/let4be/crusty-core"
 keywords = ["crawler", "spider", "rust", "async", "multi-threaded"]
 
+[package.metadata.release]
+
+[features]
+select_rs = ["select"]
+
+[[example]]
+name="find_duplicate_titles"
+required-features = ["select_rs"]
+
+[[example]]
+name="simple"
+required-features = ["select_rs"]
+
+[[example]]
+name="simple-short"
+required-features = ["select_rs"]
+
 [dependencies]
 tracing-tools = "~0.2.0"
 
@@ -25,7 +42,7 @@ url = "~2.2.1"
 http = "~0.2.3"
 bytes = "~1.0.1"
 flate2 = "~1.0.20"
-select = "~0.5.0"
+select = {version = "~0.5.0", optional = true}
 ipnet = "~2.3.0"
 
 humansize = "~1.1.0"
@@ -44,4 +61,5 @@ derivative = "2.2.0"
 tracing-subscriber = "~0.2.17"
 tracing = "~0.1.25"
 
-[package.metadata.release]
+[package.metadata.cargo-udeps.ignore]
+development = ["tracing-subscriber", "tracing"]

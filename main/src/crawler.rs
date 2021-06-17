@@ -47,20 +47,6 @@ pub struct CrawlingRules<JS, TS, P: ParsedDocument> {
 	pub custom_document_parser: Arc<DocumentParser<P>>,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues> Default for CrawlingRules<JS, TS, SelectDocument> {
-	fn default() -> Self {
-		Self::new(CrawlingRulesOptions::default(), select_document_parser())
-	}
-}
-
-pub fn select_document_parser() -> DocumentParser<SelectDocument> {
-	Box::new(|reader: Box<dyn io::Read + Sync + Send>| -> Result<SelectDocument> {
-		Ok(SelectDocument {
-			document: select::document::Document::from_read(reader).context("cannot read html document")?,
-		})
-	})
-}
-
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> CrawlingRules<JS, TS, P> {
 	pub fn new(opts: CrawlingRulesOptions, custom_document_parser: DocumentParser<P>) -> Self {
 		Self {

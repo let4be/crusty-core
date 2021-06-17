@@ -18,20 +18,6 @@ pub type BoxedStatusFilter<JS, TS> = BoxedFn<dyn status_filters::Filter<JS, TS> 
 pub type BoxedLoadFilter<JS, TS> = BoxedFn<dyn load_filters::Filter<JS, TS> + Send + Sync>;
 pub type BoxedTaskExpander<JS, TS, P> = BoxedFn<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>;
 
-pub struct SelectDocument {
-	pub(crate) document: select::document::Document,
-}
-
-impl Deref for SelectDocument {
-	type Target = select::document::Document;
-
-	fn deref(&self) -> &Self::Target {
-		&self.document
-	}
-}
-
-impl ParsedDocument for SelectDocument {}
-
 pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub url:       url::Url,
 	pub addrs:     Option<Vec<SocketAddr>>,

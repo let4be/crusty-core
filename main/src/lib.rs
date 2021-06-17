@@ -1,10 +1,13 @@
-pub use flume;
-pub use select;
-
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 mod macro_helpers;
+
+pub use flume;
+#[cfg(feature = "select_rs")]
+pub use select;
+#[cfg(feature = "select_rs")]
+pub mod select_task_expanders;
 
 mod internal_prelude;
 pub mod prelude;

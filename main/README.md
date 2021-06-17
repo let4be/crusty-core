@@ -20,13 +20,13 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
-impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
     fn expand(
         &self,
         ctx: &mut Ctx,
         _: &Task,
         _: &HttpStatus,
-        doc: &SelectDocument,
+        doc: &Document,
     ) -> task_expanders::Result {
         if let Some(title) = doc.find(Name("title")).next().map(|v| v.text()) {
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
@@ -41,7 +41,8 @@ async fn main() -> anyhow::Result<()> {
     let crawler = Crawler::new_default()?;
 
     let settings = config::CrawlingSettings::default();
-    let rules = CrawlingRules::default().with_task_expander(|| DataExtractor {});
+    let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
+        .with_task_expander(|| DataExtractor {});
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
@@ -61,8 +62,9 @@ If you want to get more fancy and configure some stuff or control your imports m
 use crusty_core::{
     config,
     select::predicate::Name,
-    select_document_parser, task_expanders,
-    types::{HttpStatus, Job, JobCtx, JobStatus, SelectDocument, Task},
+    select_task_expanders::{document_parser, Document},
+    task_expanders,
+    types::{HttpStatus, Job, JobCtx, JobStatus, Task},
     Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };
 
@@ -78,13 +80,13 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
-impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
     fn expand(
         &self,
         ctx: &mut Ctx,
         _: &Task,
         _: &HttpStatus,
-        doc: &SelectDocument,
+        doc: &Document,
     ) -> task_expanders::Result {
         let title = doc.find(Name("title")).next().map(|v| v.text());
         if let Some(title) = title {
@@ -105,8 +107,8 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
-    let rules = CrawlingRules::new(rules_opt, select_document_parser())
-        .with_task_expander(|| DataExtractor {});
+    let rules =
+        CrawlingRules::new(rules_opt, document_parser()).with_task_expander(|| DataExtractor {});
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
@@ -124,6 +126,12 @@ async fn main() -> anyhow::Result<()> {
 ### Install
 
 Simply add this to your `Cargo.toml`
+```
+[dependencies]
+crusty-core = {version = "~0.42.0", features = ["select_rs"]}
+```
+
+if you need just library without built-in `select.rs` task expanders(for links, images, etc)
 ```
 [dependencies]
 crusty-core = "~0.42.0"
