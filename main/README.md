@@ -6,7 +6,7 @@
 ### Example - crawl single website, collect information about `TITLE` tags
 
 ```rust
-use crusty_core::prelude::*;
+use crusty_core::{prelude::*, select_task_expanders::FollowLinks};
 
 #[derive(Debug, Default)]
 pub struct JobState {
@@ -42,7 +42,8 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
-        .with_task_expander(|| DataExtractor {});
+        .with_task_expander(|| DataExtractor {})
+        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
@@ -62,9 +63,9 @@ If you want to get more fancy and configure some stuff or control your imports m
 use crusty_core::{
     config,
     select::predicate::Name,
-    select_task_expanders::{document_parser, Document},
+    select_task_expanders::{document_parser, Document, FollowLinks},
     task_expanders,
-    types::{HttpStatus, Job, JobCtx, JobStatus, Task},
+    types::{HttpStatus, Job, JobCtx, JobStatus, LinkTarget, Task},
     Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };
 
@@ -107,8 +108,9 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
-    let rules =
-        CrawlingRules::new(rules_opt, document_parser()).with_task_expander(|| DataExtractor {});
+    let rules = CrawlingRules::new(rules_opt, document_parser())
+        .with_task_expander(|| DataExtractor {})
+        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {

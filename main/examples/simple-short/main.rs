@@ -1,4 +1,4 @@
-use crusty_core::prelude::*;
+use crusty_core::{prelude::*, select_task_expanders::FollowLinks};
 
 #[derive(Debug, Default)]
 pub struct JobState {
@@ -34,7 +34,8 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
-        .with_task_expander(|| DataExtractor {});
+        .with_task_expander(|| DataExtractor {})
+        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {

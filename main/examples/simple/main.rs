@@ -1,9 +1,9 @@
 use crusty_core::{
     config,
     select::predicate::Name,
-    select_task_expanders::{document_parser, Document},
+    select_task_expanders::{document_parser, Document, FollowLinks},
     task_expanders,
-    types::{HttpStatus, Job, JobCtx, JobStatus, Task},
+    types::{HttpStatus, Job, JobCtx, JobStatus, LinkTarget, Task},
     Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };
 
@@ -46,8 +46,9 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
-    let rules =
-        CrawlingRules::new(rules_opt, document_parser()).with_task_expander(|| DataExtractor {});
+    let rules = CrawlingRules::new(rules_opt, document_parser())
+        .with_task_expander(|| DataExtractor {})
+        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 
     let job = Job::new("https://example.com", settings, rules, JobState::default())?;
     for r in crawler.iter(job) {
