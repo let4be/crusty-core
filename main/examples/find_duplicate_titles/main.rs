@@ -18,7 +18,13 @@ impl fmt::Display for JobState {
         let r = self
             .duplicate_titles
             .iter()
-            .map(|(k, u)| format!("'{}': [{}]", k, u.iter().map(|u| u.to_string()).collect::<Vec<String>>().join(", ")))
+            .map(|(k, u)| {
+                format!(
+                    "'{}': [{}]",
+                    k,
+                    u.iter().map(|u| u.to_string()).collect::<Vec<String>>().join(", ")
+                )
+            })
             .collect::<Vec<String>>()
             .join("; ");
         write!(f, "{}", r)
@@ -52,7 +58,11 @@ impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
         _: &HttpStatus,
         doc: &SelectDocument,
     ) -> task_expanders::Result {
-        let title = doc.find(Name("title")).next().map(|v| v.text()).ok_or_else(|| anyhow!("title not found"))?;
+        let title = doc
+            .find(Name("title"))
+            .next()
+            .map(|v| v.text())
+            .ok_or_else(|| anyhow!("title not found"))?;
         ctx.task_state.title = title.clone();
 
         {
@@ -79,7 +89,8 @@ async fn process_responses(rx: ChReceiver<JobUpdate<JobState, TaskState>>) {
 }
 
 fn configure_tracing() -> Result<()> {
-    let collector = tracing_subscriber::fmt().with_target(false).with_max_level(Level::INFO).finish();
+    let collector =
+        tracing_subscriber::fmt().with_target(false).with_max_level(Level::INFO).finish();
     tracing::subscriber::set_global_default(collector)?;
     Ok(())
 }
@@ -94,15 +105,18 @@ async fn main() -> Result<()> {
         return Err(anyhow!("please specify JOB_URL env. variable"))
     };
 
-    let concurrency_profile =
-        config::ConcurrencyProfile { parser_concurrency: 2, ..config::ConcurrencyProfile::default() };
+    let concurrency_profile = config::ConcurrencyProfile {
+        parser_concurrency: 2,
+        ..config::ConcurrencyProfile::default()
+    };
     let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, tx_pp);
 
     let settings = config::CrawlingSettings::default();
-    let rules_options = CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
+    let rules_options =
+        CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
     let rules = CrawlingRules::new(rules_options, select_document_parser())
         .with_task_expander(|| DataExtractor {})
         .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
