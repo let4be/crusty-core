@@ -58,24 +58,14 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 	}
 }
 
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""))]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub url:      url::Url,
 	pub addrs:    Option<Vec<SocketAddr>>,
 	pub settings: Arc<config::CrawlingSettings>,
 	pub rules:    Arc<Box<dyn JobRules<JS, TS, P>>>,
 	pub ctx:      JobCtx<JS, TS>,
-}
-
-impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Clone for ResolvedJob<JS, TS, P> {
-	fn clone(&self) -> Self {
-		Self {
-			url:      self.url.clone(),
-			addrs:    self.addrs.clone(),
-			settings: self.settings.clone(),
-			rules:    self.rules.clone(),
-			ctx:      self.ctx.clone(),
-		}
-	}
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> From<Job<JS, TS, P>> for ResolvedJob<JS, TS, P> {
@@ -332,6 +322,8 @@ impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
 pub type JobSharedState = Arc<Mutex<HashMap<String, Box<dyn std::any::Any + Send + Sync>>>>;
 
+#[derive(Derivative)]
+#[derivative(Clone(bound = "TS: Clone"))]
 pub struct JobCtx<JS, TS> {
 	pub settings:   Arc<config::CrawlingSettings>,
 	pub started_at: Instant,
@@ -340,20 +332,6 @@ pub struct JobCtx<JS, TS> {
 	pub job_state:  Arc<Mutex<JS>>,
 	pub task_state: TS,
 	links:          Vec<Link>,
-}
-
-impl<JS: JobStateValues, TS: TaskStateValues> Clone for JobCtx<JS, TS> {
-	fn clone(&self) -> Self {
-		Self {
-			settings:   self.settings.clone(),
-			started_at: self.started_at,
-			root_url:   self.root_url.clone(),
-			shared:     self.shared.clone(),
-			job_state:  self.job_state.clone(),
-			task_state: self.task_state.clone(),
-			links:      self.links.clone(),
-		}
-	}
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {

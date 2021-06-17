@@ -351,24 +351,14 @@ impl<R: Resolver> Crawler<R> {
 	}
 }
 
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""))]
 pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> {
 	job_rx:              Receiver<Job<JS, TS, P>>,
 	update_tx:           Sender<JobUpdate<JS, TS>>,
 	parse_tx:            Sender<ParserTask>,
 	concurrency_profile: config::ConcurrencyProfile,
 	networking_profile:  config::ResolvedNetworkingProfile<R>,
-}
-
-impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Clone for MultiCrawler<JS, TS, R, P> {
-	fn clone(&self) -> Self {
-		Self {
-			job_rx:              self.job_rx.clone(),
-			update_tx:           self.update_tx.clone(),
-			parse_tx:            self.parse_tx.clone(),
-			concurrency_profile: self.concurrency_profile.clone(),
-			networking_profile:  self.networking_profile.clone(),
-		}
-	}
 }
 
 pub type MultiCrawlerTuple<JS, TS, R, P> =

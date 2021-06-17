@@ -13,6 +13,7 @@ pub use std::{
 };
 
 pub use anyhow::{anyhow, Context as _};
+pub use derivative::Derivative;
 pub use flume::{bounded as bounded_ch, unbounded as unbounded_ch, Receiver, RecvError, Sender};
 pub use rand::{thread_rng, Rng};
 pub use tokio::time::{self, timeout, Duration, Instant};
