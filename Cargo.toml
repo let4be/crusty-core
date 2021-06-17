@@ -9,8 +9,5 @@ opt-level = 3
 
 [workspace]
     members = [
-        "examples/find_duplicate_titles",
-        "examples/simple",
-        "examples/simple-short",
         "main"
     ]

@@ -23,6 +23,11 @@ repos:
             entry: bash -c "cargo +nightly clippy -- -D warnings"
             language: system
             pass_filenames: false
+        -   id: test
+            name: Testing
+            entry: bash -c "cargo test"
+            language: system
+            pass_filenames: false
         -   id: udeps
             name: Find unused dependencies
             entry: bash -c "cargo +nightly udeps --all-targets "

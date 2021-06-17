@@ -39,3 +39,7 @@ num_cpus = "~1.13.0"
 rand = "~0.8.0"
 
 derivative = "2.2.0"
+
+[dev-dependencies]
+tracing-subscriber = "~0.2.17"
+tracing = "~0.1.25"

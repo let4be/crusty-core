@@ -51,7 +51,7 @@ crusty-core = "~0.42.0"
 
 ### Notes
 
-Please see [examples](../examples) for more complicated usage scenarios.
+Please see [examples](examples) for more complicated usage scenarios.
 This crawler is more verbose than some others, but it allows incredible customization at each and every step.
 
 If you are interested in the area of broad web crawling there's [crusty](https://github.com/let4be/crusty), developed fully on top of `crusty-core` that tries to tackle on some challenges of broad web crawling
