@@ -1,27 +1,21 @@
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
-use crate::types as rt;
+use crate::{types as rt, types::SelectDocument};
 
 pub type Result = rt::ExtResult<()>;
 
-pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
+pub trait Expander<JS: rt::JobStateValues, TS: rt::TaskStateValues, P> {
 	fn name(&self) -> String {
 		String::from("no name")
 	}
-	fn expand(
-		&self,
-		ctx: &mut rt::JobCtx<JS, TS>,
-		task: &rt::Task,
-		status: &rt::HttpStatus,
-		document: &select::document::Document,
-	) -> Result;
+	fn expand(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus, document: &P) -> Result;
 }
 
 pub struct FollowLinks {
 	link_target: rt::LinkTarget,
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for FollowLinks {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS, SelectDocument> for FollowLinks {
 	name! {}
 
 	fn expand(
@@ -29,7 +23,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for Follo
 		ctx: &mut rt::JobCtx<JS, TS>,
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
-		document: &select::document::Document,
+		document: &SelectDocument,
 	) -> Result {
 		let links: Vec<rt::Link> = document
 			.find(select::predicate::Name("a"))
@@ -63,7 +57,7 @@ pub struct LoadImages {
 	link_target: rt::LinkTarget,
 }
 
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for LoadImages {
+impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS, SelectDocument> for LoadImages {
 	name! {}
 
 	fn expand(
@@ -71,7 +65,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS> for LoadI
 		ctx: &mut rt::JobCtx<JS, TS>,
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
-		document: &select::document::Document,
+		document: &SelectDocument,
 	) -> Result {
 		let links: Vec<rt::Link> = document
 			.find(select::predicate::Name("img"))

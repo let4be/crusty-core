@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use crusty_core::{
     config,
-    select::{document::Document, predicate::Name},
-    task_expanders,
-    types::{HttpStatus, Job, JobCtx, JobStatus, Task},
+    select::predicate::Name,
+    select_document_parser, task_expanders,
+    types::{HttpStatus, Job, JobCtx, JobStatus, SelectDocument, Task},
     Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct JobState {
     sum_title_len: usize,
 }
@@ -20,8 +20,8 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
-impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::Result {
+impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &SelectDocument) -> task_expanders::Result {
         let title = doc.find(Name("title")).next().map(|v| v.text());
         if let Some(title) = title {
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
-    let rules = CrawlingRules::new(rules_opt).with_task_expander(|| DataExtractor {});
+    let rules = CrawlingRules::new(rules_opt, select_document_parser()).with_task_expander(|| DataExtractor {});
 
     let job = Job::new("https://example.com", Arc::new(settings), rules, JobState::default())?;
     for r in crawler.iter(job) {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crusty_core::prelude::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct JobState {
     sum_title_len: usize,
 }
@@ -14,8 +14,8 @@ pub struct TaskState {
 
 pub struct DataExtractor {}
 type Ctx = JobCtx<JobState, TaskState>;
-impl TaskExpander<JobState, TaskState> for DataExtractor {
-    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &Document) -> task_expanders::Result {
+impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
+    fn expand(&self, ctx: &mut Ctx, _: &Task, _: &HttpStatus, doc: &SelectDocument) -> task_expanders::Result {
         if let Some(title) = doc.find(Name("title")).next().map(|v| v.text()) {
             ctx.job_state.lock().unwrap().sum_title_len += title.len();
             ctx.task_state.title = title;

@@ -21,12 +21,13 @@ pub(crate) trait ClientFactory<R: Resolver> {
 	fn make(&self) -> (HttpClient<R>, hyper_utils::Stats);
 }
 
-pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Resolver> {
-	job:            ResolvedJob<JS, TS>,
-	status_filters: Arc<StatusFilters<JS, TS>>,
-	load_filters:   Arc<LoadFilters<JS, TS>>,
-	task_expanders: Arc<TaskExpanders<JS, TS>>,
-	term_on_error:  bool,
+pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> {
+	job:             ResolvedJob<JS, TS, P>,
+	status_filters:  Arc<StatusFilters<JS, TS>>,
+	load_filters:    Arc<LoadFilters<JS, TS>>,
+	task_expanders:  Arc<TaskExpanders<JS, TS, P>>,
+	document_parser: Arc<DocumentParser<P>>,
+	term_on_error:   bool,
 
 	tx:             Sender<JobUpdate<JS, TS>>,
 	tasks_rx:       Receiver<Arc<Task>>,
@@ -35,20 +36,21 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Reso
 	resolver:       Arc<R>,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS, R> {
+impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> TaskProcessor<JS, TS, R, P> {
 	pub(crate) fn new(
-		job: ResolvedJob<JS, TS>,
+		job: ResolvedJob<JS, TS, P>,
 		tx: Sender<JobUpdate<JS, TS>>,
 		tasks_rx: Receiver<Arc<Task>>,
 		parse_tx: Sender<ParserTask>,
 		client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
 		resolver: Arc<R>,
 		term_on_error: bool,
-	) -> TaskProcessor<JS, TS, R> {
+	) -> TaskProcessor<JS, TS, R, P> {
 		TaskProcessor {
 			status_filters: Arc::new(job.rules.status_filters()),
 			load_filters: Arc::new(job.rules.load_filters()),
 			task_expanders: Arc::new(job.rules.task_expanders()),
+			document_parser: job.rules.document_parser(),
 			term_on_error,
 			job,
 			tx,
@@ -211,11 +213,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver> TaskProcessor<JS, TS,
 			let mut job_ctx = self.job.ctx.clone();
 			let task_state = Arc::clone(&task_state);
 			let links = Arc::clone(&links);
+			let document_parser = Arc::clone(&self.document_parser);
 
 			move || -> Result<FollowData> {
 				let t = Instant::now();
 
-				let document = select::document::Document::from_read(reader).context("cannot read html document")?;
+				let document = document_parser(reader)?;
 
 				for expander in task_expanders.iter() {
 					let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {

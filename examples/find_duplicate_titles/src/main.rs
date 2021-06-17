@@ -5,12 +5,12 @@ use std::{
 };
 
 use anyhow::anyhow;
-use crusty_core::prelude::*;
+use crusty_core::{prelude::*, task_expanders::FollowLinks};
 use tracing::{info, Level};
 
 type Result<T> = anyhow::Result<T>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct JobState {
     duplicate_titles: HashMap<String, Vec<url::Url>>,
 }
@@ -40,9 +40,8 @@ impl JobState {
 pub struct TaskState {
     title: String,
 }
-
 pub struct DataExtractor {}
-impl TaskExpander<JobState, TaskState> for DataExtractor {
+impl TaskExpander<JobState, TaskState, SelectDocument> for DataExtractor {
     fn name(&self) -> String {
         String::from("My Fancy Data Extractor With Fancy Name")
     }
@@ -52,7 +51,7 @@ impl TaskExpander<JobState, TaskState> for DataExtractor {
         ctx: &mut JobCtx<JobState, TaskState>,
         task: &Task,
         _: &HttpStatus,
-        doc: &Document,
+        doc: &SelectDocument,
     ) -> task_expanders::Result {
         let title = doc.find(Name("title")).next().map(|v| v.text()).ok_or_else(|| anyhow!("title not found"))?;
         ctx.task_state.title = title.clone();
@@ -104,12 +103,10 @@ async fn main() -> Result<()> {
     let crawler = Crawler::new(networking_profile, tx_pp);
 
     let settings = config::CrawlingSettings::default();
-    let rules_options = CrawlingRulesOptions {
-        page_budget: Some(100),
-        link_target: LinkTarget::Follow,
-        ..CrawlingRulesOptions::default()
-    };
-    let rules = CrawlingRules::new(rules_options).with_task_expander(|| DataExtractor {});
+    let rules_options = CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
+    let rules = CrawlingRules::new(rules_options, select_document_parser())
+        .with_task_expander(|| DataExtractor {})
+        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 
     let (update_tx, update_rx) = ch_unbounded();
     let h_sub = tokio::spawn(process_responses(update_rx));

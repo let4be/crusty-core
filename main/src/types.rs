@@ -5,32 +5,48 @@ use thiserror::{self, Error};
 use crate::internal_prelude::*;
 use crate::{config, load_filters, status_filters, task_expanders, task_filters};
 
+pub trait ParsedDocument: 'static {}
 pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::Filter<JS, TS> + Send + Sync>>;
 pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::Filter<JS, TS> + Send + Sync>>;
 pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::Filter<JS, TS> + Send + Sync>>;
-pub type TaskExpanders<JS, TS> = Vec<Box<dyn task_expanders::Expander<JS, TS> + Send + Sync>>;
+pub type TaskExpanders<JS, TS, P> = Vec<Box<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>>;
+pub type DocumentParser<P> = Box<dyn Fn(Box<dyn io::Read + Sync + Send>) -> Result<P> + Send + Sync + 'static>;
 
 pub type BoxedFn<T> = Box<dyn Fn() -> Box<T> + Send + Sync>;
 pub type BoxedTaskFilter<JS, TS> = BoxedFn<dyn task_filters::Filter<JS, TS> + Send + Sync>;
 pub type BoxedStatusFilter<JS, TS> = BoxedFn<dyn status_filters::Filter<JS, TS> + Send + Sync>;
 pub type BoxedLoadFilter<JS, TS> = BoxedFn<dyn load_filters::Filter<JS, TS> + Send + Sync>;
-pub type BoxedTaskExpander<JS, TS> = BoxedFn<dyn task_expanders::Expander<JS, TS> + Send + Sync>;
+pub type BoxedTaskExpander<JS, TS, P> = BoxedFn<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>;
 
-pub struct Job<JS: JobStateValues, TS: TaskStateValues> {
+pub struct SelectDocument {
+	pub(crate) document: select::document::Document,
+}
+
+impl Deref for SelectDocument {
+	type Target = select::document::Document;
+
+	fn deref(&self) -> &Self::Target {
+		&self.document
+	}
+}
+
+impl ParsedDocument for SelectDocument {}
+
+pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub url:       url::Url,
 	pub addrs:     Option<Vec<SocketAddr>>,
 	pub settings:  Arc<config::CrawlingSettings>,
-	pub rules:     Box<dyn JobRules<JS, TS>>,
+	pub rules:     Box<dyn JobRules<JS, TS, P>>,
 	pub job_state: JS,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
-	pub fn new<R: JobRules<JS, TS>>(
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> {
+	pub fn new<R: JobRules<JS, TS, P>>(
 		url: &str,
 		settings: Arc<config::CrawlingSettings>,
 		rules: R,
 		job_state: JS,
-	) -> anyhow::Result<Job<JS, TS>> {
+	) -> anyhow::Result<Job<JS, TS, P>> {
 		let url = Url::parse(url).context("cannot parse url")?;
 
 		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state })
@@ -42,17 +58,28 @@ impl<JS: JobStateValues, TS: TaskStateValues> Job<JS, TS> {
 	}
 }
 
-#[derive(Clone)]
-pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues> {
+pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub url:      url::Url,
 	pub addrs:    Option<Vec<SocketAddr>>,
 	pub settings: Arc<config::CrawlingSettings>,
-	pub rules:    Arc<Box<dyn JobRules<JS, TS>>>,
+	pub rules:    Arc<Box<dyn JobRules<JS, TS, P>>>,
 	pub ctx:      JobCtx<JS, TS>,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<JS, TS> {
-	fn from(job: Job<JS, TS>) -> ResolvedJob<JS, TS> {
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Clone for ResolvedJob<JS, TS, P> {
+	fn clone(&self) -> Self {
+		Self {
+			url:      self.url.clone(),
+			addrs:    self.addrs.clone(),
+			settings: self.settings.clone(),
+			rules:    self.rules.clone(),
+			ctx:      self.ctx.clone(),
+		}
+	}
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> From<Job<JS, TS, P>> for ResolvedJob<JS, TS, P> {
+	fn from(job: Job<JS, TS, P>) -> ResolvedJob<JS, TS, P> {
 		ResolvedJob {
 			url:      job.url.clone(),
 			addrs:    job.addrs,
@@ -63,14 +90,15 @@ impl<JS: JobStateValues, TS: TaskStateValues> From<Job<JS, TS>> for ResolvedJob<
 	}
 }
 
-pub trait JobRules<JS: JobStateValues, TS: TaskStateValues>: Send + Sync + 'static {
+pub trait JobRules<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument>: Send + Sync + 'static {
 	fn task_filters(&self) -> TaskFilters<JS, TS>;
 	fn status_filters(&self) -> StatusFilters<JS, TS>;
 	fn load_filters(&self) -> LoadFilters<JS, TS>;
-	fn task_expanders(&self) -> TaskExpanders<JS, TS>;
+	fn task_expanders(&self) -> TaskExpanders<JS, TS, P>;
+	fn document_parser(&self) -> Arc<DocumentParser<P>>;
 }
 
-pub type BoxedJobRules<JS, TS> = Box<dyn JobRules<JS, TS>>;
+pub type BoxedJobRules<JS, TS, P> = Box<dyn JobRules<JS, TS, P>>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -294,9 +322,9 @@ pub struct ParserResponse {
 	pub work_duration: Duration,
 }
 
-pub trait JobStateValues: Send + Sync + Clone + 'static {}
+pub trait JobStateValues: Send + Sync + 'static {}
 
-impl<T: Send + Sync + Clone + 'static> JobStateValues for T {}
+impl<T: Send + Sync + 'static> JobStateValues for T {}
 
 pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {}
 
@@ -304,7 +332,6 @@ impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
 pub type JobSharedState = Arc<Mutex<HashMap<String, Box<dyn std::any::Any + Send + Sync>>>>;
 
-#[derive(Clone)]
 pub struct JobCtx<JS, TS> {
 	pub settings:   Arc<config::CrawlingSettings>,
 	pub started_at: Instant,
@@ -313,6 +340,20 @@ pub struct JobCtx<JS, TS> {
 	pub job_state:  Arc<Mutex<JS>>,
 	pub task_state: TS,
 	links:          Vec<Link>,
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> Clone for JobCtx<JS, TS> {
+	fn clone(&self) -> Self {
+		Self {
+			settings:   self.settings.clone(),
+			started_at: self.started_at,
+			root_url:   self.root_url.clone(),
+			shared:     self.shared.clone(),
+			job_state:  self.job_state.clone(),
+			task_state: self.task_state.clone(),
+			links:      self.links.clone(),
+		}
+	}
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
@@ -353,7 +394,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 }
 
 impl Link {
-	pub(crate) fn new(
+	pub fn new(
 		href: &str,
 		rel: &str,
 		alt: &str,

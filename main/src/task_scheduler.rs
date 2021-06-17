@@ -2,8 +2,8 @@
 use crate::internal_prelude::*;
 use crate::{task_filters, types::*};
 
-pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
-	job:          ResolvedJob<JS, TS>,
+pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
+	job:          ResolvedJob<JS, TS, P>,
 	task_filters: TaskFilters<JS, TS>,
 
 	task_seq_num:  usize,
@@ -16,8 +16,8 @@ pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues> {
 	update_tx:                Sender<JobUpdate<JS, TS>>,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues> TaskScheduler<JS, TS> {
-	pub(crate) fn new(job: ResolvedJob<JS, TS>, update_tx: Sender<JobUpdate<JS, TS>>) -> TaskScheduler<JS, TS> {
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<JS, TS, P> {
+	pub(crate) fn new(job: ResolvedJob<JS, TS, P>, update_tx: Sender<JobUpdate<JS, TS>>) -> TaskScheduler<JS, TS, P> {
 		let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
 		let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
 
