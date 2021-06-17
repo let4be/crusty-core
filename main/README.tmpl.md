@@ -5,11 +5,11 @@
 
 ### Example - crawl single website, collect information about `TITLE` tags
 
-!INCLUDECODE "examples/simple-short/src/main.rs" (rust)
+!INCLUDECODE "main/examples/simple-short/main.rs" (rust)
 
 If you want to get more fancy and configure some stuff or control your imports more precisely
 
-!INCLUDECODE "examples/simple/src/main.rs" (rust)
+!INCLUDECODE "main/examples/simple/main.rs" (rust)
 
 ### Install
 
