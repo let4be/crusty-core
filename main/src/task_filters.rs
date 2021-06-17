@@ -76,13 +76,17 @@ pub struct HashSetDedup {
 	is_checking: bool,
 }
 
+#[derive(Derivative)]
+#[derivative(Default)]
 #[derive(Clone, PartialEq, Debug, Copy)]
 enum RobotsTxtState {
+	#[derivative(Default)]
 	None,
 	Requested,
 	Decided,
 }
 
+#[derive(Default)]
 pub struct RobotsTxt {
 	state:       RobotsTxtState,
 	link_buffer: Vec<rt::Link>,
@@ -293,12 +297,6 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 
 		self.link_buffer.push((*task.link).clone());
 		Ok(Action::Skip)
-	}
-}
-
-impl Default for RobotsTxt {
-	fn default() -> Self {
-		Self { state: RobotsTxtState::None, link_buffer: vec![], matcher: None }
 	}
 }
 
