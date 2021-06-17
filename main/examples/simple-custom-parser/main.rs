@@ -12,11 +12,10 @@ use html5ever::{
     local_name,
     tendril::*,
     tokenizer::{
-        BufferQueue, CharacterTokens, EndTag, NullCharacterToken, ParseError, StartTag, TagToken,
-        Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
+        BufferQueue, CharacterTokens, ParseError, TagToken, Token, TokenSink, TokenSinkResult,
+        Tokenizer, TokenizerOpts,
     },
 };
-use markup5ever::{ExpandedName, LocalName, Namespace, Prefix, QualName};
 
 #[derive(Debug, Default)]
 pub struct JobState {
@@ -83,7 +82,6 @@ impl TaskExpander<JobState, TaskState, Document> for LinkExtractor {
             )
             .ok()
             {
-                println!("found a link {}", &link);
                 links.push(link);
             }
         }
@@ -104,9 +102,9 @@ impl TokenSink for TokenCollector {
 
     fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
         match token {
-            CharacterTokens(b) => {}
-            TagToken(tag) => {
-                if tag.name == local_name!("a") {
+            CharacterTokens(_) => {}
+            TagToken(tag) => match tag.name {
+                local_name!("a") => {
                     let mut link = LinkData::default();
                     for attr in tag.attrs {
                         match attr.name.local {
@@ -118,8 +116,9 @@ impl TokenSink for TokenCollector {
                     }
                     self.links.push(link)
                 }
-            }
-            ParseError(err) => {}
+                _ => {}
+            },
+            ParseError(_) => {}
             _ => {}
         }
         TokenSinkResult::Continue
@@ -128,7 +127,7 @@ impl TokenSink for TokenCollector {
 
 fn document_parser() -> DocumentParser<Document> {
     Box::new(|mut reader: Box<dyn io::Read + Sync + Send>| -> rt::Result<Document> {
-        let mut sink = TokenCollector::default();
+        let sink = TokenCollector::default();
         let mut chunk = ByteTendril::new();
         reader.read_to_tendril(&mut chunk).context("cannot read")?;
         let mut input = BufferQueue::new();
