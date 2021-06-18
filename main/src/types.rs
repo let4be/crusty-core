@@ -376,14 +376,12 @@ impl Link {
 		target: LinkTarget,
 		parent: &Link,
 	) -> Result<Self> {
-		let link_str = href.splitn(2, '#').next().context("cannot prepare link")?;
-
-		let url = Url::parse(link_str).unwrap_or(
-			parent
-				.url
-				.join(link_str)
-				.with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))?,
-		);
+		let mut url = Url::parse(href)
+			.or_else(|_err| {
+				parent.url.join(href).with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))
+			})
+			.context("cannot parse url")?;
+		url.set_fragment(None);
 
 		Ok(Self {
 			url,
