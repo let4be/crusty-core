@@ -151,6 +151,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPer
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, seq_num: usize, _: &mut rt::Task) -> Result {
 		if seq_num > self.current_task_seq_num {
 			self.links_within_current_task = 0;
+			self.current_task_seq_num = seq_num;
 		}
 		self.links_within_current_task += 1;
 		if self.links_within_current_task > self.allocated_budget {
