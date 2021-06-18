@@ -204,7 +204,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 		let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
 
 		let task_state = Arc::new(Mutex::new(Some(TS::default())));
-		let links = Arc::new(Mutex::new(Some(Vec::<Link>::new())));
+		let links = Arc::new(Mutex::new(Some(Vec::<Arc<Link>>::new())));
 
 		let payload = {
 			let task = Arc::clone(&task);
@@ -243,7 +243,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 
 				{
 					let mut links = links.lock().unwrap();
-					*links = Some(job_ctx._consume_links());
+					*links = Some(job_ctx.consume_links());
 				}
 
 				{
@@ -268,7 +268,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 		}
 		{
 			let mut links = links.lock().unwrap();
-			self.job.ctx.push_links(links.take().unwrap());
+			self.job.ctx.push_shared_links(links.take().unwrap().into_iter());
 		}
 		Ok(follow_data)
 	}

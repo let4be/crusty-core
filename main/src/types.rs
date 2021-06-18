@@ -326,7 +326,7 @@ pub struct JobCtx<JS, TS> {
 	pub shared:     JobSharedState,
 	pub job_state:  Arc<Mutex<JS>>,
 	pub task_state: TS,
-	links:          Vec<Link>,
+	links:          Vec<Arc<Link>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
@@ -353,16 +353,22 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 		})
 	}
 
-	pub fn push_links(&mut self, links: Vec<Link>) {
+	pub fn push_link(&mut self, link: Link) {
+		self.links.push(Arc::new(link))
+	}
+
+	pub fn push_links<I: IntoIterator<Item = Link>>(&mut self, links: I) {
+		self.links.extend(links.into_iter().map(Arc::new))
+	}
+
+	pub fn push_shared_links<I: IntoIterator<Item = Arc<Link>>>(&mut self, links: I) {
 		self.links.extend(links.into_iter())
 	}
 
-	pub fn consume_links(&mut self) -> Vec<Arc<Link>> {
-		self.links.drain(0..).map(Arc::new).collect()
-	}
-
-	pub(crate) fn _consume_links(&mut self) -> Vec<Link> {
-		self.links.drain(0..).collect()
+	pub(crate) fn consume_links(&mut self) -> Vec<Arc<Link>> {
+		let mut links = vec![];
+		mem::swap(&mut links, &mut self.links);
+		links
 	}
 }
 
