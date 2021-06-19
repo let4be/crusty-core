@@ -120,13 +120,14 @@ impl<'de> Deserialize<'de> for CDuration {
 #[derive(Clone, Debug, Deserialize)]
 pub struct ConcurrencyProfile {
 	pub parser_concurrency: usize,
+	pub parser_pin:         usize,
 	pub domain_concurrency: usize,
 }
 
 impl Default for ConcurrencyProfile {
 	fn default() -> Self {
 		let physical_cores = num_cpus::get_physical();
-		Self { parser_concurrency: physical_cores, domain_concurrency: physical_cores * 40 }
+		Self { parser_concurrency: physical_cores, parser_pin: 0, domain_concurrency: physical_cores * 40 }
 	}
 }
 
