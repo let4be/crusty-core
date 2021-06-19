@@ -1,4 +1,5 @@
 pre-release-replacements = [
-    {file="README.tmpl.md", search="crusty-core = .*", replace="{{crate_name}} = \"~{{version}}\""},
+    {file="README.tmpl.md", search="crusty-core\\s*=\\s*\\{\\s*version\\s*=\\s*\"[^\"]*\"", replace="{{crate_name}} = {version = \"~{{version}}\""},
+    {file="README.tmpl.md", search="crusty-core\\s*=\\s*\"[^\"]*\"", replace="{{crate_name}} = \"~{{version}}\""},
     {file="src/config.rs", search="crusty-core/[^\"]*", replace="{{crate_name}}/{{version}}"},
 ]
