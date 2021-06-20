@@ -227,26 +227,38 @@ pub struct FollowMetrics {
 	pub duration: Duration,
 }
 
-pub enum StatusResult {
-	None,
-	Ok(HttpStatus),
-	Err(Error),
-}
-
-pub enum FollowResult {
-	None,
-	Ok(FollowData),
-	Err(Error),
-}
-
-pub enum LoadResult {
-	None,
-	Ok(LoadData),
-	Err(Error),
-}
-
 pub struct LoadData {
 	pub metrics: LoadMetrics,
+}
+
+pub struct StatusResult(pub(crate) Option<Result<HttpStatus>>);
+
+impl Deref for StatusResult {
+	type Target = Option<Result<HttpStatus>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+pub struct LoadResult(pub(crate) Option<Result<LoadData>>);
+
+impl Deref for LoadResult {
+	type Target = Option<Result<LoadData>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+pub struct FollowResult(pub(crate) Option<Result<FollowData>>);
+
+impl Deref for FollowResult {
+	type Target = Option<Result<FollowData>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 pub struct JobProcessing {
@@ -262,10 +274,10 @@ impl JobProcessing {
 	pub fn new(resolve_data: ResolveData) -> Self {
 		Self {
 			resolve_data,
-			head_status: StatusResult::None,
-			status: StatusResult::None,
-			load: LoadResult::None,
-			follow: FollowResult::None,
+			head_status: StatusResult(None),
+			status: StatusResult(None),
+			load: LoadResult(None),
+			follow: FollowResult(None),
 			links: vec![],
 		}
 	}
@@ -444,7 +456,7 @@ impl fmt::Display for ResolveData {
 impl fmt::Display for StatusResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			StatusResult::Ok(ref r) => {
+			StatusResult(Some(Ok(ref r))) => {
 				write!(
 					f,
 					"[{}] wait {}ms / status {}ms",
@@ -453,7 +465,7 @@ impl fmt::Display for StatusResult {
 					r.metrics.duration.as_millis()
 				)
 			}
-			StatusResult::Err(ref err) => {
+			StatusResult(Some(Err(ref err))) => {
 				write!(f, "[err]: {:#}", err)
 			}
 			_ => {
@@ -466,7 +478,7 @@ impl fmt::Display for StatusResult {
 impl fmt::Display for LoadResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			LoadResult::Ok(ref r) => {
+			LoadResult(Some(Ok(ref r))) => {
 				let m = &r.metrics;
 				write!(
 					f,
@@ -476,7 +488,7 @@ impl fmt::Display for LoadResult {
 					m.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
 				)
 			}
-			LoadResult::Err(ref err) => {
+			LoadResult(Some(Err(ref err))) => {
 				write!(f, "[err loading]: {:#}", err)
 			}
 			_ => {
@@ -489,11 +501,11 @@ impl fmt::Display for LoadResult {
 impl fmt::Display for FollowResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			FollowResult::Ok(ref r) => {
+			FollowResult(Some(Ok(ref r))) => {
 				let m = &r.metrics;
 				write!(f, "parsed {}ms", m.duration.as_millis())
 			}
-			FollowResult::Err(ref err) => {
+			FollowResult(Some(Err(ref err))) => {
 				write!(f, "[err following]: {:#}", err)
 			}
 			_ => {

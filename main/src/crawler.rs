@@ -198,7 +198,7 @@ impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
 
 		let resolver_adaptor = Adaptor::new(Arc::clone(&self.networking_profile.resolver));
 		let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
-		http.set_connect_timeout(v.connect_timeout.clone().map(|v| *v));
+		http.set_connect_timeout(v.connect_timeout.map(|v| *v));
 
 		let bind_local_ipv4 = if !v.bind_local_ipv4.is_empty() {
 			if v.bind_local_ipv4.len() == 1 {
@@ -236,7 +236,6 @@ impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
 		let stats = http_counting.stats.clone();
 		let https = hyper_tls::HttpsConnector::new_with_connector(http_counting);
 		let client = hyper::Client::builder().build::<_, hyper::Body>(https);
-
 		(client, stats)
 	}
 }
