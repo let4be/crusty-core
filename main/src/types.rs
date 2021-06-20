@@ -233,7 +233,7 @@ pub struct LoadData {
 	pub metrics: LoadMetrics,
 }
 
-pub struct StatusResult(pub(crate) Result<HttpStatus>);
+pub struct StatusResult(pub Result<HttpStatus>);
 
 impl Deref for StatusResult {
 	type Target = Result<HttpStatus>;
@@ -243,7 +243,7 @@ impl Deref for StatusResult {
 	}
 }
 
-pub struct LoadResult(pub(crate) Result<LoadData>);
+pub struct LoadResult(pub Result<LoadData>);
 
 impl Deref for LoadResult {
 	type Target = Result<LoadData>;
@@ -253,7 +253,7 @@ impl Deref for LoadResult {
 	}
 }
 
-pub struct FollowResult(pub(crate) Result<FollowData>);
+pub struct FollowResult(pub Result<FollowData>);
 
 impl Deref for FollowResult {
 	type Target = Result<FollowData>;
