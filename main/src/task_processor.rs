@@ -293,10 +293,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 		{
 			match self.status(Arc::clone(&task), &client, true).await {
 				Ok((head_status, _)) => {
-					status.head_status = StatusResult(Some(Ok(head_status)));
+					status.head_status = StatusResult(Ok(head_status));
 				}
 				Err(err) => {
-					status.head_status = StatusResult(Some(Err(err)));
+					status.head_status = StatusResult(Err(err));
 					return Ok(status)
 				}
 			}
@@ -307,22 +307,22 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 
 		let (get_status, resp) = match self.status(Arc::clone(&task), &client, false).await {
 			Err(err) => {
-				status.status = StatusResult(Some(Err(err)));
+				status.status = StatusResult(Err(err));
 				return Ok(status)
 			}
 			Ok((get_status, resp)) => (get_status, resp),
 		};
 
 		let load_r = self.load(Arc::clone(&task), &get_status, stats, resp).await;
-		status.status = StatusResult(Some(Ok(get_status.clone())));
+		status.status = StatusResult(Ok(get_status.clone()));
 
 		let reader = match load_r {
 			Err(err) => {
-				status.load = LoadResult(Some(Err(err)));
+				status.load = LoadResult(Err(err));
 				return Ok(status)
 			}
 			Ok((load_data, reader)) => {
-				status.load = LoadResult(Some(Ok(load_data)));
+				status.load = LoadResult(Ok(load_data));
 				reader
 			}
 		};
@@ -334,8 +334,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 		status.follow = self
 			.follow(Arc::clone(&task), get_status, reader)
 			.await
-			.map(|follow_data| FollowResult(Some(Ok(follow_data))))
-			.unwrap_or_else(|err| FollowResult(Some(Err(err))));
+			.map(|follow_data| FollowResult(Ok(follow_data)))
+			.unwrap_or_else(|err| FollowResult(Err(err)));
 
 		Ok(status)
 	}

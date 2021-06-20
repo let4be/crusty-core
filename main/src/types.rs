@@ -133,6 +133,8 @@ pub enum Error {
 		#[source]
 		source: anyhow::Error,
 	},
+	#[error("operation was not requested")]
+	NotRequested {},
 }
 
 pub type Result<T> = anyhow::Result<T, Error>;
@@ -231,30 +233,30 @@ pub struct LoadData {
 	pub metrics: LoadMetrics,
 }
 
-pub struct StatusResult(pub(crate) Option<Result<HttpStatus>>);
+pub struct StatusResult(pub(crate) Result<HttpStatus>);
 
 impl Deref for StatusResult {
-	type Target = Option<Result<HttpStatus>>;
+	type Target = Result<HttpStatus>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-pub struct LoadResult(pub(crate) Option<Result<LoadData>>);
+pub struct LoadResult(pub(crate) Result<LoadData>);
 
 impl Deref for LoadResult {
-	type Target = Option<Result<LoadData>>;
+	type Target = Result<LoadData>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-pub struct FollowResult(pub(crate) Option<Result<FollowData>>);
+pub struct FollowResult(pub(crate) Result<FollowData>);
 
 impl Deref for FollowResult {
-	type Target = Option<Result<FollowData>>;
+	type Target = Result<FollowData>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
@@ -274,10 +276,10 @@ impl JobProcessing {
 	pub fn new(resolve_data: ResolveData) -> Self {
 		Self {
 			resolve_data,
-			head_status: StatusResult(None),
-			status: StatusResult(None),
-			load: LoadResult(None),
-			follow: FollowResult(None),
+			head_status: StatusResult(Err(Error::NotRequested {})),
+			status: StatusResult(Err(Error::NotRequested {})),
+			load: LoadResult(Err(Error::NotRequested {})),
+			follow: FollowResult(Err(Error::NotRequested {})),
 			links: vec![],
 		}
 	}
@@ -456,7 +458,7 @@ impl fmt::Display for ResolveData {
 impl fmt::Display for StatusResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			StatusResult(Some(Ok(ref r))) => {
+			StatusResult(Ok(ref r)) => {
 				write!(
 					f,
 					"[{}] wait {}ms / status {}ms",
@@ -465,11 +467,11 @@ impl fmt::Display for StatusResult {
 					r.metrics.duration.as_millis()
 				)
 			}
-			StatusResult(Some(Err(ref err))) => {
-				write!(f, "[err]: {:#}", err)
-			}
-			_ => {
+			StatusResult(Err(Error::NotRequested {})) => {
 				write!(f, "")
+			}
+			StatusResult(Err(ref err)) => {
+				write!(f, "[err]: {:#}", err)
 			}
 		}
 	}
@@ -478,7 +480,7 @@ impl fmt::Display for StatusResult {
 impl fmt::Display for LoadResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			LoadResult(Some(Ok(ref r))) => {
+			LoadResult(Ok(ref r)) => {
 				let m = &r.metrics;
 				write!(
 					f,
@@ -488,11 +490,11 @@ impl fmt::Display for LoadResult {
 					m.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
 				)
 			}
-			LoadResult(Some(Err(ref err))) => {
-				write!(f, "[err loading]: {:#}", err)
-			}
-			_ => {
+			LoadResult(Err(Error::NotRequested {})) => {
 				write!(f, "none")
+			}
+			LoadResult(Err(ref err)) => {
+				write!(f, "[err loading]: {:#}", err)
 			}
 		}
 	}
@@ -501,15 +503,15 @@ impl fmt::Display for LoadResult {
 impl fmt::Display for FollowResult {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			FollowResult(Some(Ok(ref r))) => {
+			FollowResult(Ok(ref r)) => {
 				let m = &r.metrics;
 				write!(f, "parsed {}ms", m.duration.as_millis())
 			}
-			FollowResult(Some(Err(ref err))) => {
-				write!(f, "[err following]: {:#}", err)
-			}
-			_ => {
+			FollowResult(Err(Error::NotRequested {})) => {
 				write!(f, "none")
+			}
+			FollowResult(Err(ref err)) => {
+				write!(f, "[err following]: {:#}", err)
 			}
 		}
 	}
