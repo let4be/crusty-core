@@ -340,7 +340,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(status)
 	}
 
-	pub(crate) fn go<'a>(mut self, n: usize) -> PinnedTask<'a> {
+	pub(crate) fn go<'a>(mut self, n: usize) -> TaskFut<'a> {
 		TracingTask::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
 

@@ -118,7 +118,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 		let _ = self.update_tx.send_async(task_response).await;
 	}
 
-	pub(crate) fn go<'a>(mut self) -> Result<PinnedTask<'a, JobUpdate<JS, TS>>> {
+	pub(crate) fn go<'a>(mut self) -> Result<TaskFut<'a, JobUpdate<JS, TS>>> {
 		let mut root_task = Task::new_root(&self.job.url)?;
 
 		Ok(TracingTask::new(span!(url = %self.job.url), async move {

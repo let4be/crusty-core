@@ -19,7 +19,7 @@ pub use flume::{bounded as bounded_ch, unbounded as unbounded_ch, Receiver, Recv
 pub use rand::{thread_rng, Rng};
 pub use tokio::time::{self, timeout, Duration, Instant};
 pub use tracing::{debug, error, event, info, trace, warn, Level};
-pub use tracing_tools::{span, PinnedFut as PinnedTask, TracingTask};
+pub use tracing_tools::{span, TaskFut, TracingTask};
 pub use url::Url;
 
 pub type PinnedFut<T> = Pin<Box<dyn Future<Output = T> + Send>>;

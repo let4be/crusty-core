@@ -24,7 +24,7 @@ impl ParserProcessor {
 		tx
 	}
 
-	fn process(&self, n: usize) -> PinnedTask {
+	fn process(&self, n: usize) -> TaskFut {
 		TracingTask::new(span!(n = n), async move {
 			while let Ok(task) = self.rx.recv() {
 				if task.res_tx.is_disconnected() {

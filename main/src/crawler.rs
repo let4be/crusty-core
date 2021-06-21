@@ -297,7 +297,7 @@ impl Crawler {
 		&self,
 		job: Job<JS, TS, P>,
 		update_tx: Sender<JobUpdate<JS, TS>>,
-	) -> PinnedTask {
+	) -> TaskFut {
 		TracingTask::new(span!(url=%job.url), async move {
 			let job = ResolvedJob::from(job);
 
@@ -381,7 +381,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 		Ok(())
 	}
 
-	pub fn go(self) -> PinnedTask<'static> {
+	pub fn go(self) -> TaskFut<'static> {
 		TracingTask::new(span!(), async move {
 			let mut handles = vec![];
 			for _ in 0..self.concurrency_profile.domain_concurrency {
