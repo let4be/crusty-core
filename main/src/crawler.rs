@@ -5,7 +5,7 @@ use crate::{
 	config::ResolvedNetworkingProfile,
 	hyper_utils, load_filters,
 	parser_processor::ParserProcessor,
-	resolver::{Adaptor, AsyncHyperResolver, AsyncStaticResolver, Resolver},
+	resolver::{Adaptor, AsyncStaticResolver},
 	status_filters, task_expanders, task_filters,
 	task_processor::*,
 	task_scheduler::*,
@@ -188,12 +188,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> JobRules<JS, TS
 }
 
 #[derive(Clone)]
-struct HttpClientFactory<R: Resolver> {
-	networking_profile: config::ResolvedNetworkingProfile<R>,
+struct HttpClientFactory {
+	networking_profile: config::ResolvedNetworkingProfile,
 }
 
-impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
-	fn make(&self) -> (HttpClient<R>, hyper_utils::Stats) {
+impl ClientFactory for HttpClientFactory {
+	fn make(&self) -> (HttpClient, hyper_utils::Stats) {
 		let v = self.networking_profile.values.clone();
 
 		let resolver_adaptor = Adaptor::new(Arc::clone(&self.networking_profile.resolver));
@@ -240,8 +240,8 @@ impl<R: Resolver> ClientFactory<R> for HttpClientFactory<R> {
 	}
 }
 
-pub struct Crawler<R: Resolver = AsyncHyperResolver> {
-	networking_profile: config::ResolvedNetworkingProfile<R>,
+pub struct Crawler {
+	networking_profile: config::ResolvedNetworkingProfile,
 	parse_tx:           Sender<ParserTask>,
 }
 
@@ -264,8 +264,8 @@ impl<JS: JobStateValues, TS: TaskStateValues> CrawlerIter<JS, TS> {
 	}
 }
 
-impl Crawler<AsyncHyperResolver> {
-	pub fn new_default() -> anyhow::Result<Crawler<AsyncHyperResolver>> {
+impl Crawler {
+	pub fn new_default() -> anyhow::Result<Crawler> {
 		let concurrency_profile = config::ConcurrencyProfile::default();
 		let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
@@ -274,8 +274,8 @@ impl Crawler<AsyncHyperResolver> {
 	}
 }
 
-impl<R: Resolver> Crawler<R> {
-	pub fn new(networking_profile: config::ResolvedNetworkingProfile<R>, tx_pp: Sender<ParserTask>) -> Crawler<R> {
+impl Crawler {
+	pub fn new(networking_profile: config::ResolvedNetworkingProfile, tx_pp: Sender<ParserTask>) -> Crawler {
 		Crawler { networking_profile, parse_tx: tx_pp }
 	}
 
@@ -337,22 +337,21 @@ impl<R: Resolver> Crawler<R> {
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""))]
-pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> {
+pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	job_rx:              Receiver<Job<JS, TS, P>>,
 	update_tx:           Sender<JobUpdate<JS, TS>>,
 	parse_tx:            Sender<ParserTask>,
 	concurrency_profile: config::ConcurrencyProfile,
-	networking_profile:  config::ResolvedNetworkingProfile<R>,
+	networking_profile:  config::ResolvedNetworkingProfile,
 }
 
-pub type MultiCrawlerTuple<JS, TS, R, P> =
-	(MultiCrawler<JS, TS, R, P>, Sender<Job<JS, TS, P>>, Receiver<JobUpdate<JS, TS>>);
-impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> MultiCrawler<JS, TS, R, P> {
+pub type MultiCrawlerTuple<JS, TS, P> = (MultiCrawler<JS, TS, P>, Sender<Job<JS, TS, P>>, Receiver<JobUpdate<JS, TS>>);
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS, TS, P> {
 	pub fn new(
 		tx_pp: Sender<ParserTask>,
 		concurrency_profile: config::ConcurrencyProfile,
-		networking_profile: config::ResolvedNetworkingProfile<R>,
-	) -> MultiCrawlerTuple<JS, TS, R, P> {
+		networking_profile: config::ResolvedNetworkingProfile,
+	) -> MultiCrawlerTuple<JS, TS, P> {
 		let (job_tx, job_rx) = bounded_ch::<Job<JS, TS, P>>(concurrency_profile.job_tx_buffer_size());
 		let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
 		(
@@ -369,7 +368,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Mu
 			if job.addrs.is_some() {
 				let np_static = ResolvedNetworkingProfile {
 					values:   np.values,
-					resolver: Arc::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone())),
+					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone()))),
 				};
 
 				let crawler = Crawler::new(np_static, self.parse_tx.clone());

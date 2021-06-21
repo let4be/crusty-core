@@ -13,15 +13,15 @@ use crate::{
 	types::*,
 };
 
-pub(crate) type HttpClient<R> = hyper::Client<HttpConnector<R>>;
-pub(crate) type HttpConnector<R> =
-	hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<ResolverAdaptor<R>>>>;
+pub(crate) type HttpClient = hyper::Client<HttpConnector>;
+pub(crate) type HttpConnector =
+	hyper_tls::HttpsConnector<hyper_utils::CountingConnector<hyper::client::HttpConnector<ResolverAdaptor>>>;
 
-pub(crate) trait ClientFactory<R: Resolver> {
-	fn make(&self) -> (HttpClient<R>, hyper_utils::Stats);
+pub(crate) trait ClientFactory {
+	fn make(&self) -> (HttpClient, hyper_utils::Stats);
 }
 
-pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> {
+pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	job:             ResolvedJob<JS, TS, P>,
 	status_filters:  Arc<StatusFilters<JS, TS>>,
 	load_filters:    Arc<LoadFilters<JS, TS>>,
@@ -32,20 +32,20 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, R: Reso
 	tx:             Sender<JobUpdate<JS, TS>>,
 	tasks_rx:       Receiver<Arc<Task>>,
 	parse_tx:       Sender<ParserTask>,
-	client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
-	resolver:       Arc<R>,
+	client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
+	resolver:       Arc<Box<dyn Resolver>>,
 }
 
-impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> TaskProcessor<JS, TS, R, P> {
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<JS, TS, P> {
 	pub(crate) fn new(
 		job: ResolvedJob<JS, TS, P>,
 		tx: Sender<JobUpdate<JS, TS>>,
 		tasks_rx: Receiver<Arc<Task>>,
 		parse_tx: Sender<ParserTask>,
-		client_factory: Box<dyn ClientFactory<R> + Send + Sync + 'static>,
-		resolver: Arc<R>,
+		client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
+		resolver: Arc<Box<dyn Resolver>>,
 		term_on_error: bool,
-	) -> TaskProcessor<JS, TS, R, P> {
+	) -> TaskProcessor<JS, TS, P> {
 		TaskProcessor {
 			status_filters: Arc::new(job.rules.status_filters()),
 			load_filters: Arc::new(job.rules.load_filters()),
@@ -97,7 +97,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 	async fn status(
 		&mut self,
 		task: Arc<Task>,
-		client: &HttpClient<R>,
+		client: &HttpClient,
 		is_head: bool,
 	) -> Result<(HttpStatus, hyper::Response<hyper::Body>)> {
 		let mut status_metrics = StatusMetrics { wait_duration: task.queued_at.elapsed(), ..Default::default() };
@@ -276,7 +276,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, R: Resolver, P: ParsedDocument> Ta
 	async fn process_task(
 		&mut self,
 		task: Arc<Task>,
-		client: &HttpClient<R>,
+		client: &HttpClient,
 		stats: &hyper_utils::Stats,
 	) -> Result<JobProcessing> {
 		let resolve_data = self.resolve(Arc::clone(&task)).await?;

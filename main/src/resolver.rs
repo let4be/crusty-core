@@ -14,10 +14,9 @@ use trust_dns_resolver::{
 #[allow(unused_imports)]
 use crate::internal_prelude::*;
 
-pub trait Resolver: Clone + Send + Sync + 'static {
-	fn new_default() -> Result<Self, io::Error>;
-	fn with_net_blacklist(self, blacklist: Arc<Vec<IpNet>>) -> Self;
-	fn resolve<T: ToString>(&self, host: T) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>>;
+pub trait Resolver: Send + Sync + Debug + 'static {
+	fn with_net_blacklist(&mut self, blacklist: Arc<Vec<IpNet>>);
+	fn resolve(&self, host: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>>;
 }
 
 #[derive(Clone, Debug)]
@@ -47,17 +46,11 @@ impl AsyncStaticResolver {
 }
 
 impl Resolver for AsyncHyperResolver {
-	fn new_default() -> Result<Self, io::Error> {
-		let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?);
-		Ok(Self { resolver, net_blacklist: Arc::new(vec![]) })
-	}
-
-	fn with_net_blacklist(mut self, blacklist: Arc<Vec<IpNet>>) -> Self {
+	fn with_net_blacklist(&mut self, blacklist: Arc<Vec<IpNet>>) {
 		self.net_blacklist = blacklist;
-		self
 	}
 
-	fn resolve<T: ToString>(&self, name: T) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
+	fn resolve(&self, name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
 		let resolver = self.clone();
 
 		let name = name.to_string();
@@ -93,16 +86,11 @@ impl Resolver for AsyncHyperResolver {
 }
 
 impl Resolver for AsyncStaticResolver {
-	fn new_default() -> Result<Self, io::Error> {
-		panic!("noop")
-	}
-
-	fn with_net_blacklist(mut self, blacklist: Arc<Vec<IpNet>>) -> Self {
+	fn with_net_blacklist(&mut self, blacklist: Arc<Vec<IpNet>>) {
 		self.net_blacklist = blacklist;
-		self
 	}
 
-	fn resolve<T: ToString>(&self, _name: T) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
+	fn resolve(&self, _name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
 		let resolver = self.clone();
 
 		Box::pin(async move {
@@ -126,18 +114,18 @@ impl Resolver for AsyncStaticResolver {
 	}
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct Adaptor<R> {
-	resolver: Arc<R>,
+#[derive(Clone)]
+pub(crate) struct Adaptor {
+	resolver: Arc<Box<dyn Resolver>>,
 }
 
-impl<R: Resolver> Adaptor<R> {
-	pub fn new(resolver: Arc<R>) -> Self {
+impl Adaptor {
+	pub fn new(resolver: Arc<Box<dyn Resolver>>) -> Self {
 		Self { resolver }
 	}
 }
 
-impl<R: Resolver> Service<Name> for Adaptor<R> {
+impl Service<Name> for Adaptor {
 	type Error = io::Error;
 	type Future = PinnedFut<Result<Self::Response, Self::Error>>;
 	type Response = std::vec::IntoIter<SocketAddr>;

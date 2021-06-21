@@ -117,6 +117,9 @@ impl<'de> Deserialize<'de> for CDuration {
 	}
 }
 
+pub type AsyncHyperResolverConfig = trust_dns_resolver::config::ResolverConfig;
+pub type AsyncHyperResolverOpts = trust_dns_resolver::config::ResolverOpts;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ConcurrencyProfile {
 	pub parser_concurrency: usize,
@@ -166,47 +169,65 @@ impl Default for NetworkingProfileValues {
 	}
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct NetworkingProfile<R: Resolver = AsyncHyperResolver> {
-	pub values: NetworkingProfileValues,
-
-	#[serde(skip)]
-	#[serde(default = "Option::default")]
-	pub resolver: Option<Arc<R>>,
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct ResolverConfig {
+	#[serde(default)]
+	config:  Option<AsyncHyperResolverConfig>,
+	#[serde(default)]
+	options: Option<AsyncHyperResolverOpts>,
 }
 
-impl Default for NetworkingProfile<AsyncHyperResolver> {
+#[derive(Clone, Debug, Deserialize)]
+pub struct NetworkingProfile {
+	pub values:          NetworkingProfileValues,
+	pub resolver_config: ResolverConfig,
+
+	#[serde(skip)]
+	resolver: Option<Arc<Box<dyn Resolver>>>,
+}
+
+impl Default for NetworkingProfile {
 	fn default() -> Self {
-		Self { values: NetworkingProfileValues::default(), resolver: None }
+		Self {
+			values:          NetworkingProfileValues::default(),
+			resolver:        None,
+			resolver_config: ResolverConfig::default(),
+		}
 	}
 }
 
-impl<R: Resolver> NetworkingProfile<R> {
-	pub fn resolve(self) -> Result<ResolvedNetworkingProfile<R>> {
+impl NetworkingProfile {
+	pub fn resolve(self) -> Result<ResolvedNetworkingProfile> {
 		ResolvedNetworkingProfile::new(self)
 	}
 }
 
 #[derive(Clone, Debug)]
-pub struct ResolvedNetworkingProfile<R: Resolver = AsyncHyperResolver> {
+pub struct ResolvedNetworkingProfile {
 	pub values: NetworkingProfileValues,
 
-	pub resolver: Arc<R>,
+	pub resolver: Arc<Box<dyn Resolver>>,
 }
 
-impl<R: Resolver> ResolvedNetworkingProfile<R> {
-	fn new(p: NetworkingProfile<R>) -> Result<Self> {
-		let resolver = if let Some(r) = p.resolver {
-			r
-		} else {
-			Arc::new(
-				R::new_default()
-					.context("cannot create default resolver")?
-					.with_net_blacklist(Arc::clone(&RESERVED_SUBNETS)),
-			)
-		};
+impl ResolvedNetworkingProfile {
+	fn new(p: NetworkingProfile) -> Result<Self> {
+		let values = p.values;
 
-		Ok(Self { values: p.values, resolver })
+		if let Some(r) = p.resolver {
+			return Ok(Self { values, resolver: r })
+		}
+
+		let (config, options) =
+			if let (Some(config), Some(options)) = (p.resolver_config.config, p.resolver_config.options) {
+				(config, options)
+			} else {
+				trust_dns_resolver::system_conf::read_system_conf()
+					.context("cannot read resolver config settings from system")?
+			};
+
+		let mut resolver = AsyncHyperResolver::new(config, options).context("cannot create default resolver")?;
+		resolver.with_net_blacklist(Arc::clone(&RESERVED_SUBNETS));
+		Ok(Self { values, resolver: Arc::new(Box::new(resolver)) })
 	}
 }
 
