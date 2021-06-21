@@ -26,12 +26,12 @@ pub struct AsyncStaticResolver {
 }
 
 #[derive(Clone, Debug)]
-pub struct AsyncHyperResolver {
+pub struct AsyncTrustDnsResolver {
 	resolver:      Arc<TokioAsyncResolver>,
 	net_blacklist: Arc<Vec<IpNet>>,
 }
 
-impl AsyncHyperResolver {
+impl AsyncTrustDnsResolver {
 	pub fn new(config: ResolverConfig, options: ResolverOpts) -> Result<Self, io::Error> {
 		let resolver = Arc::new(TokioAsyncResolver::tokio(config, options)?);
 
@@ -45,7 +45,7 @@ impl AsyncStaticResolver {
 	}
 }
 
-impl Resolver for AsyncHyperResolver {
+impl Resolver for AsyncTrustDnsResolver {
 	fn with_net_blacklist(&mut self, blacklist: Arc<Vec<IpNet>>) {
 		self.net_blacklist = blacklist;
 	}

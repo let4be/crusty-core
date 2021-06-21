@@ -6,7 +6,7 @@ pub use select::predicate::Name;
 pub use crate::select_task_expanders::{document_parser, Document};
 pub use crate::{
 	config, load_filters,
-	resolver::AsyncHyperResolver,
+	resolver::AsyncTrustDnsResolver,
 	status_filters, task_expanders, task_filters,
 	types::{DocumentParser, HttpStatus, Job, JobCtx, JobStatus, JobUpdate, Link, LinkTarget, ParsedDocument, Task},
 	Crawler, CrawlingRules, CrawlingRulesOptions, MultiCrawler, ParserProcessor, TaskExpander,

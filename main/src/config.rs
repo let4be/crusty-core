@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Deserializer};
 #[allow(unused_imports)]
 use crate::_prelude::*;
 use crate::{
-	resolver::{AsyncHyperResolver, Resolver, RESERVED_SUBNETS},
+	resolver::{AsyncTrustDnsResolver, Resolver, RESERVED_SUBNETS},
 	types,
 };
 
@@ -225,7 +225,7 @@ impl ResolvedNetworkingProfile {
 					.context("cannot read resolver config settings from system")?
 			};
 
-		let mut resolver = AsyncHyperResolver::new(config, options).context("cannot create default resolver")?;
+		let mut resolver = AsyncTrustDnsResolver::new(config, options).context("cannot create default resolver")?;
 		resolver.with_net_blacklist(Arc::clone(&RESERVED_SUBNETS));
 		Ok(Self { values, resolver: Arc::new(Box::new(resolver)) })
 	}
