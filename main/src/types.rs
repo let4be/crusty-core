@@ -2,7 +2,7 @@ use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
 
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::{config, load_filters, status_filters, task_expanders, task_filters};
 
 pub trait ParsedDocument: 'static {}

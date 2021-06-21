@@ -1,7 +1,7 @@
 use serde::{de, Deserialize, Deserializer};
 
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::{
 	resolver::{AsyncHyperResolver, Resolver, RESERVED_SUBNETS},
 	types,

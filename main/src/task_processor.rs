@@ -6,7 +6,7 @@ use hyper::body::HttpBody;
 use io::Read;
 
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::{
 	hyper_utils,
 	resolver::{Adaptor as ResolverAdaptor, Resolver},

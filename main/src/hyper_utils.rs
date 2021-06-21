@@ -9,7 +9,7 @@ use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct Stats {

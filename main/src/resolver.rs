@@ -12,7 +12,7 @@ use trust_dns_resolver::{
 };
 
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 
 pub trait Resolver: Send + Sync + Debug + 'static {
 	fn with_net_blacklist(&mut self, blacklist: Arc<Vec<IpNet>>);

@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::types as rt;
 
 pub type Result = rt::ExtResult<()>;

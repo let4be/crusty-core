@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::{task_expanders::*, types as rt};
 
 pub fn document_parser() -> rt::DocumentParser<Document> {

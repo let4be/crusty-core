@@ -9,7 +9,7 @@ pub use select;
 #[cfg(feature = "select_rs")]
 pub mod select_task_expanders;
 
-mod internal_prelude;
+mod _prelude;
 pub mod prelude;
 
 mod hyper_utils;

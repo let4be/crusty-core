@@ -1,7 +1,7 @@
 use robotstxt_with_cache as robotstxt;
 
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::{types as rt, types::ExtError};
 
 #[derive(Clone, PartialEq, Debug, Copy)]

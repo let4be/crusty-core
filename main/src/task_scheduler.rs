@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::internal_prelude::*;
+use crate::_prelude::*;
 use crate::{task_filters, types::*};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
