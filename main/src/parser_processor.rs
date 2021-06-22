@@ -11,7 +11,7 @@ pub struct ParserProcessor {
 }
 
 impl ParserProcessor {
-	pub fn spawn(concurrency_profile: config::ConcurrencyProfile, stack_size_bytes: usize) -> Sender<ParserTask> {
+	pub fn spawn(concurrency_profile: config::ConcurrencyProfile, stack_size_bytes: usize) -> Arc<Sender<ParserTask>> {
 		let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size());
 
 		let s = Self {
@@ -21,7 +21,7 @@ impl ParserProcessor {
 			rx,
 		};
 		let _ = tokio::spawn(s.go());
-		tx
+		Arc::new(tx)
 	}
 
 	fn process(&self, n: usize) -> TaskFut {
