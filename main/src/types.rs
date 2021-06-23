@@ -89,6 +89,8 @@ pub type BoxedJobRules<JS, TS, P> = Box<dyn JobRules<JS, TS, P>>;
 pub enum Error {
 	#[error(transparent)]
 	Other(#[from] anyhow::Error),
+	#[error("timeout while awaiting for status response")]
+	StatusTimeout,
 	#[error("timeout during loading")]
 	LoadTimeout,
 }

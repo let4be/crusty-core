@@ -149,7 +149,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		}
 
 		let req_fut = client.request(req.body(hyper::Body::default()).context("could not construct http request")?);
-		let resp = timeout(*self.job.settings.load_timeout, req_fut).await.map_err(|_| Error::LoadTimeout)?;
+		let resp = timeout(*self.job.settings.status_timeout, req_fut).await.map_err(|_| Error::StatusTimeout)?;
 
 		let resp = resp.context("cannot make http get")?;
 		status_metrics.duration = t.elapsed();
@@ -187,7 +187,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		let enc =
 			String::from(resp.headers().get(http::header::CONTENT_ENCODING).map_or("", |h| h.to_str().unwrap_or("")));
 
-		let body = self.read(&mut resp, enc).await.with_context(|| "cannot read http get response")?;
+		let read_fut = self.read(&mut resp, enc);
+		let res = timeout(*self.job.settings.load_timeout, read_fut).await.map_err(|_| Error::LoadTimeout)?;
+		let body = res.with_context(|| "cannot read http get response")?;
 
 		load_metrics.read_size = stats.read();
 		load_metrics.write_size = stats.write();
