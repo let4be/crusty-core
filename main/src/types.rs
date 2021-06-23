@@ -191,7 +191,7 @@ pub struct ResolveData {
 #[derive(Clone)]
 pub struct HttpStatus {
 	pub started_at: Instant,
-	pub code:       i32,
+	pub code:       u16,
 	pub headers:    http::HeaderMap<http::HeaderValue>,
 	pub metrics:    StatusMetrics,
 	pub filter_err: Option<Arc<ExtStatusError>>,
