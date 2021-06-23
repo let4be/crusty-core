@@ -1,9 +1,10 @@
+use ipnet::Ipv4Net;
 use serde::{de, Deserialize, Deserializer};
 
 #[allow(unused_imports)]
 use crate::_prelude::*;
 use crate::{
-	resolver::{AsyncTrustDnsResolver, Resolver, RESERVED_SUBNETS},
+	resolver::{AsyncTrustDnsResolver, Resolver, RESERVED_V4_SUBNETS, RESERVED_V6_SUBNETS},
 	types,
 };
 
@@ -62,6 +63,24 @@ impl<'de> Deserialize<'de> for CIP6Addr {
 		let s: String = Deserialize::deserialize(deserializer)?;
 		let addr: Ipv6Addr = s.parse().map_err(de::Error::custom)?;
 		Ok(CIP6Addr(addr))
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct CIpv4Net(pub Ipv4Net);
+
+impl Deref for CIpv4Net {
+	type Target = Ipv4Net;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<'de> Deserialize<'de> for CIpv4Net {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CIpv4Net, D::Error> {
+		let s: String = Deserialize::deserialize(deserializer)?;
+		s.parse::<Ipv4Net>().map(CIpv4Net).map_err(de::Error::custom)
 	}
 }
 
@@ -260,8 +279,9 @@ pub struct ResolverConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct NetworkingProfile {
-	pub values:          NetworkingProfileValues,
-	pub resolver_config: ResolverConfig,
+	pub values:           NetworkingProfileValues,
+	pub resolver_config:  ResolverConfig,
+	pub net_v4_blacklist: Vec<CIpv4Net>,
 
 	#[serde(skip)]
 	resolver: Option<Arc<Box<dyn Resolver>>>,
@@ -270,9 +290,10 @@ pub struct NetworkingProfile {
 impl Default for NetworkingProfile {
 	fn default() -> Self {
 		Self {
-			values:          NetworkingProfileValues::default(),
-			resolver:        None,
-			resolver_config: ResolverConfig::default(),
+			values:           NetworkingProfileValues::default(),
+			resolver:         None,
+			resolver_config:  ResolverConfig::default(),
+			net_v4_blacklist: vec![],
 		}
 	}
 }
@@ -308,7 +329,14 @@ impl ResolvedNetworkingProfile {
 			};
 
 		let mut resolver = AsyncTrustDnsResolver::new(config, *options).context("cannot create default resolver")?;
-		resolver.with_net_blacklist(Arc::clone(&RESERVED_SUBNETS));
+
+		let reserved_v4 = RESERVED_V4_SUBNETS
+			.clone()
+			.into_iter()
+			.chain(p.net_v4_blacklist.into_iter().map(|a| *a))
+			.collect::<Vec<_>>();
+		resolver.with_net_v4_blacklist(reserved_v4);
+		resolver.with_net_v6_blacklist(RESERVED_V6_SUBNETS.to_vec());
 		Ok(Self { values, resolver: Arc::new(Box::new(resolver)) })
 	}
 }
