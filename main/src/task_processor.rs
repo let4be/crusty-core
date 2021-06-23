@@ -80,6 +80,41 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(bytes.freeze())
 	}
 
+	fn filter<T, Name: Fn(&T) -> &'static str, Filter: Fn(&mut JobCtx<JS, TS>, &T) -> ExtResult<()>>(
+		ctx: &mut JobCtx<JS, TS>,
+		kind: FilterKind,
+		filters: &Arc<Vec<T>>,
+		name_fn: Name,
+		filter_fn: Filter,
+	) -> Option<Arc<ExtStatusError>> {
+		for filter in filters.iter() {
+			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter_fn(ctx, filter)));
+
+			if let Err(err) = r {
+				return Some(Arc::new(ExtStatusError::Panic {
+					kind,
+					name: name_fn(filter),
+					source: anyhow!("{:?}", err),
+				}))
+			}
+
+			match r.unwrap() {
+				Err(ExtError::Term { reason }) => {
+					return Some(Arc::new(ExtStatusError::Term { kind, reason, name: name_fn(filter) }))
+				}
+
+				Err(ExtError::Other(err)) => {
+					trace!("error in {:?} {}: {:#}", kind, name_fn(filter), &err);
+					return Some(Arc::new(ExtStatusError::Err { kind, name: name_fn(filter), source: err }))
+				}
+
+				Ok(_) => {}
+			}
+		}
+
+		None
+	}
+
 	async fn resolve(&mut self, task: Arc<Task>) -> Result<ResolveData> {
 		let t = Instant::now();
 
@@ -131,46 +166,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		let status_filters = Arc::clone(&self.status_filters);
 		status.filter_err = Self::filter(
 			&mut self.job.ctx,
-			"status filter",
+			if is_head { FilterKind::HeadStatusFilter } else { FilterKind::GetStatusFilter },
 			&status_filters,
 			|filter| filter.name(),
 			|ctx, filter| filter.accept(ctx, &task, &status),
 		);
 
 		Ok((status, resp))
-	}
-
-	fn filter<T, NF: Fn(&T) -> &'static str, FF: Fn(&mut JobCtx<JS, TS>, &T) -> ExtResult<()>>(
-		ctx: &mut JobCtx<JS, TS>,
-		kind: &'static str,
-		filters: &Arc<Vec<T>>,
-		name_fn: NF,
-		filter_fn: FF,
-	) -> Option<Arc<ExtStatusError>> {
-		for filter in filters.iter() {
-			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter_fn(ctx, filter)));
-
-			if let Err(err) = r {
-				return Some(Arc::new(ExtStatusError::Panic {
-					kind,
-					name: name_fn(filter),
-					source: anyhow!("{:?}", err),
-				}))
-			}
-
-			match r.unwrap() {
-				Err(ExtError::Term) => return Some(Arc::new(ExtStatusError::Term { kind, name: name_fn(filter) })),
-
-				Err(ExtError::Other(err)) => {
-					trace!("error in {} {}: {:#}", kind, name_fn(filter), &err);
-					return Some(Arc::new(ExtStatusError::Err { kind, name: name_fn(filter), source: err }))
-				}
-
-				Ok(_) => {}
-			}
-		}
-
-		None
 	}
 
 	async fn load(
@@ -191,17 +193,16 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		load_metrics.write_size = stats.write();
 		load_metrics.duration = status.started_at.elapsed();
 
-		let mut load_data = LoadData { metrics: load_metrics, filter_err: None };
-
 		let load_filters = Arc::clone(&self.load_filters);
-		load_data.filter_err = Self::filter(
+		let filter_err = Self::filter(
 			&mut self.job.ctx,
-			"load filter",
+			FilterKind::LoadFilter,
 			&load_filters,
 			|filter| filter.name(),
 			|ctx, filter| filter.accept(ctx, &task, &status, Box::new(body.clone().reader())),
 		);
 
+		let load_data = LoadData { metrics: load_metrics, filter_err };
 		Ok((load_data, Box::new(body.reader())))
 	}
 
@@ -228,12 +229,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 				let t = Instant::now();
 
 				let document = document_parser(reader)?;
-				let mut follow_data =
-					FollowData { metrics: FollowMetrics { duration: t.elapsed() }, expand_err: None };
 
-				follow_data.expand_err = Self::filter(
+				let filter_err = Self::filter(
 					&mut job_ctx,
-					"task expander",
+					FilterKind::FollowFilter,
 					&task_expanders,
 					|filter| filter.name(),
 					|ctx, filter| filter.expand(ctx, &task, &status, &document),
@@ -249,6 +248,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 					*task_state = Some(job_ctx.task_state);
 				}
 
+				let follow_data = FollowData { metrics: FollowMetrics { duration: t.elapsed() }, filter_err };
 				Ok(follow_data)
 			}
 		};

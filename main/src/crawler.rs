@@ -109,7 +109,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> JobRules<JS, TS
 	fn task_filters(&self) -> TaskFilters<JS, TS> {
 		let options = &self.options;
 		let mut task_filters: TaskFilters<JS, TS> = vec![
-			Box::new(task_filters::MaxRedirect::new(options.max_redirect)),
 			Box::new(task_filters::SkipNoFollowLinks::new()),
 			Box::new(task_filters::SelectiveTaskFilter::new(
 				// this filter is enabled only for links that we follow(either directly with get or with head+get)
@@ -147,7 +146,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> JobRules<JS, TS
 	fn status_filters(&self) -> StatusFilters<JS, TS> {
 		let options = &self.options;
 
-		let mut status_filters: StatusFilters<JS, TS> = vec![Box::new(status_filters::Redirect::new())];
+		let mut status_filters: StatusFilters<JS, TS> =
+			vec![Box::new(status_filters::Redirect::new(self.options.max_redirect))];
 		if let Some(v) = &options.accepted_content_types {
 			status_filters.push(Box::new(status_filters::ContentType::new(v.clone())));
 		}

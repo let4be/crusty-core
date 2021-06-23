@@ -95,20 +95,28 @@ pub enum Error {
 	NotRequested {},
 }
 
+#[derive(Debug)]
+pub enum FilterKind {
+	HeadStatusFilter,
+	GetStatusFilter,
+	LoadFilter,
+	FollowFilter,
+}
+
 #[derive(Error, Debug)]
 pub enum ExtStatusError {
 	#[error("terminated by {kind:?} {name:?}")]
-	Term { kind: &'static str, name: &'static str },
+	Term { kind: FilterKind, name: &'static str, reason: &'static str },
 	#[error("error in {kind:?} {name:?}")]
 	Err {
-		kind:   &'static str,
+		kind:   FilterKind,
 		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
 	},
 	#[error("panic in {kind:?} {name:?}")]
 	Panic {
-		kind:   &'static str,
+		kind:   FilterKind,
 		name:   &'static str,
 		#[source]
 		source: anyhow::Error,
@@ -121,8 +129,8 @@ pub type Result<T> = anyhow::Result<T, Error>;
 pub enum ExtError {
 	#[error(transparent)]
 	Other(#[from] anyhow::Error),
-	#[error("terminated")]
-	Term,
+	#[error("terminated because '{reason:?}'")]
+	Term { reason: &'static str },
 }
 pub type ExtResult<T> = std::result::Result<T, ExtError>;
 
@@ -267,7 +275,7 @@ impl JobProcessing {
 
 pub struct FollowData {
 	pub metrics:    FollowMetrics,
-	pub expand_err: Option<Arc<ExtStatusError>>,
+	pub filter_err: Option<Arc<ExtStatusError>>,
 }
 
 pub struct JobFinished {}

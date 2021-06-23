@@ -58,13 +58,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 					}
 					return Ok(task_filters::Action::Skip)
 				}
-				Err(ExtError::Term) => {
+				Err(ExtError::Term { reason }) => {
 					if task.is_root() {
-						warn!(action = "term", filter_name = %filter.name(), action);
+						warn!(action = "term", filter_name = %filter.name(), reason = reason, action);
 					} else {
-						debug!(action = "term", filter_name = %filter.name(), action);
+						debug!(action = "term", filter_name = %filter.name(), reason = reason, action);
 					}
-					return Err(ExtError::Term)
+					return Err(ExtError::Term { reason })
 				}
 				Err(ExtError::Other(err)) => {
 					debug!(filter_name = %filter.name(), "error during task filtering: {:#}", err);
@@ -98,7 +98,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 			.filter_map(|link| Task::new(Arc::clone(link), &task_response.task).ok())
 			.map(|mut task| (self.schedule_filter(&mut task), task))
 			.take_while(|(r, _)| {
-				if let Err(ExtError::Term) = r {
+				if let Err(ExtError::Term { reason: _ }) = r {
 					return false
 				}
 				true

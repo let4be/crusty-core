@@ -10,6 +10,9 @@ pub enum Action {
 	Skip,
 }
 pub type Result = rt::ExtResult<Action>;
+pub static TOTAL_PAGE_BUDGET_TERM_REASON: &str = "TotalPageBudget";
+pub static LINK_PER_PAGE_BUDGET_TERM_REASON: &str = "LinkPerPageBudget";
+pub static MAX_LEVEL_TERM_REASON: &str = "MaxLevel";
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	// filter can have an optional name
@@ -64,10 +67,6 @@ pub struct LinkPerPageBudget {
 
 pub struct PageLevel {
 	max_level: usize,
-}
-
-pub struct MaxRedirect {
-	max_redirect: usize,
 }
 
 #[derive(Default, Clone)]
@@ -130,7 +129,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for TotalPa
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, _: &mut rt::Task) -> Result {
 		if self.budget >= self.allocated_budget {
-			return Err(ExtError::Term)
+			return Err(ExtError::Term { reason: TOTAL_PAGE_BUDGET_TERM_REASON })
 		}
 		self.budget += 1;
 		Ok(Action::Accept)
@@ -155,7 +154,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for LinkPer
 		}
 		self.links_within_current_task += 1;
 		if self.links_within_current_task > self.allocated_budget {
-			return Err(ExtError::Term)
+			return Err(ExtError::Term { reason: LINK_PER_PAGE_BUDGET_TERM_REASON })
 		}
 		Ok(Action::Accept)
 	}
@@ -174,7 +173,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for PageLev
 
 	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
 		if task.level >= self.max_level {
-			return Err(ExtError::Term)
+			return Err(ExtError::Term { reason: MAX_LEVEL_TERM_REASON })
 		}
 		Ok(Action::Accept)
 	}
@@ -217,25 +216,6 @@ impl HashSetDedup {
 		let mut filter = self.clone();
 		filter.is_checking = false;
 		filter
-	}
-}
-
-impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for MaxRedirect {
-	name! {}
-
-	fn accept(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
-		if task.link.redirect > self.max_redirect {
-			return Ok(Action::Skip)
-		}
-		Ok(Action::Accept)
-	}
-}
-
-impl MaxRedirect {
-	struct_name! {}
-
-	pub fn new(max_redirect: usize) -> Self {
-		Self { max_redirect }
 	}
 }
 

@@ -1,8 +1,12 @@
 #[allow(unused_imports)]
 use crate::_prelude::*;
-use crate::types as rt;
+use crate::{types as rt, types::ExtError};
 
 pub type Result = rt::ExtResult<()>;
+
+pub static REDIRECT_TERM_REASON: &str = "Redirect";
+pub static MAX_REDIRECT_TERM_REASON: &str = "MaxRedirect";
+pub static CONTENT_TYPE_TERM_REASON: &str = "ContentType";
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	fn name(&self) -> &'static str {
@@ -30,7 +34,7 @@ impl<'a, JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Con
 				return Ok(())
 			}
 		}
-		Err(rt::ExtError::Term)
+		Err(rt::ExtError::Term { reason: CONTENT_TYPE_TERM_REASON })
 	}
 }
 
@@ -42,8 +46,9 @@ impl<'a> ContentType<'a> {
 	}
 }
 
-#[derive(Default)]
-pub struct Redirect {}
+pub struct Redirect {
+	max_redirects: usize,
+}
 
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirect {
 	name! {}
@@ -52,6 +57,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 		let sc = status.code;
 		if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
 			return Ok(())
+		}
+
+		if task.link.redirect >= self.max_redirects {
+			return Err(ExtError::Term { reason: MAX_REDIRECT_TERM_REASON })
 		}
 
 		let location = status
@@ -65,14 +74,14 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 			.context("cannot create link")?;
 
 		ctx.push_links(vec![link]);
-		Ok(())
+		Err(ExtError::Term { reason: REDIRECT_TERM_REASON })
 	}
 }
 
 impl Redirect {
 	struct_name! {}
 
-	pub fn new() -> Self {
-		Self::default()
+	pub fn new(max_redirects: usize) -> Self {
+		Self { max_redirects }
 	}
 }
