@@ -292,13 +292,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			match self.status(Arc::clone(&task), &client, true).await {
 				Ok((head_status, _)) => {
 					let done = head_status.filter_err.is_some();
-					status.head_status = StatusResult(Ok(head_status));
+					status.head_status = StatusResult(Some(Ok(head_status)));
 					if done {
 						return Ok(status)
 					}
 				}
 				Err(err) => {
-					status.head_status = StatusResult(Err(err));
+					status.head_status = StatusResult(Some(Err(err)));
 					return Ok(status)
 				}
 			}
@@ -309,7 +309,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 		let (get_status, resp) = match self.status(Arc::clone(&task), &client, false).await {
 			Err(err) => {
-				status.status = StatusResult(Err(err));
+				status.status = StatusResult(Some(Err(err)));
 				return Ok(status)
 			}
 			Ok((get_status, resp)) => (get_status, resp),
@@ -318,7 +318,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		let load_r = self.load(Arc::clone(&task), &get_status, stats, resp).await;
 		{
 			let done = get_status.filter_err.is_some();
-			status.status = StatusResult(Ok(get_status.clone()));
+			status.status = StatusResult(Some(Ok(get_status.clone())));
 			if done {
 				return Ok(status)
 			}
@@ -326,12 +326,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 		let reader = match load_r {
 			Err(err) => {
-				status.load = LoadResult(Err(err));
+				status.load = LoadResult(Some(Err(err)));
 				return Ok(status)
 			}
 			Ok((load_data, reader)) => {
 				let done = load_data.filter_err.is_some();
-				status.load = LoadResult(Ok(load_data));
+				status.load = LoadResult(Some(Ok(load_data)));
 				if done {
 					return Ok(status)
 				}
@@ -347,8 +347,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		status.follow = self
 			.follow(Arc::clone(&task), get_status, reader)
 			.await
-			.map(|follow_data| FollowResult(Ok(follow_data)))
-			.unwrap_or_else(|err| FollowResult(Err(err)));
+			.map(|follow_data| FollowResult(Some(Ok(follow_data))))
+			.unwrap_or_else(|err| FollowResult(Some(Err(err))));
 
 		Ok(status)
 	}
