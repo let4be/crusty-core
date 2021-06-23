@@ -130,13 +130,13 @@ async fn main() -> anyhow::Result<()> {
 Simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = {version = "~0.64.0", features=["select_rs"]}
+crusty-core = {version = "~0.65.0", features=["select_rs"]}
 ```
 
 if you need just library without built-in `select.rs` task expanders(for links, images, etc)
 ```
 [dependencies]
-crusty-core = "~0.64.0"
+crusty-core = "~0.65.0"
 ```
 
 ### Key capabilities
