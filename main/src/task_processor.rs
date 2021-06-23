@@ -27,7 +27,6 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	load_filters:    Arc<LoadFilters<JS, TS>>,
 	task_expanders:  Arc<TaskExpanders<JS, TS, P>>,
 	document_parser: Arc<DocumentParser<P>>,
-	term_on_error:   bool,
 
 	tx:             Sender<JobUpdate<JS, TS>>,
 	tasks_rx:       Receiver<Arc<Task>>,
@@ -44,14 +43,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		parse_tx: Sender<ParserTask>,
 		client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
 		resolver: Arc<Box<dyn Resolver>>,
-		term_on_error: bool,
 	) -> TaskProcessor<JS, TS, P> {
 		TaskProcessor {
 			status_filters: Arc::new(job.rules.status_filters()),
 			load_filters: Arc::new(job.rules.load_filters()),
 			task_expanders: Arc::new(job.rules.task_expanders()),
 			document_parser: job.rules.document_parser(),
-			term_on_error,
 			job,
 			tx,
 			tasks_rx,
@@ -123,35 +120,57 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		status_metrics.duration = t.elapsed();
 		let rs = resp.status();
 
-		let status = HttpStatus {
+		let mut status = HttpStatus {
 			started_at: t,
 			code:       rs.as_u16() as i32,
 			headers:    resp.headers().clone(),
 			metrics:    status_metrics,
+			filter_err: None,
 		};
 
 		let status_filters = Arc::clone(&self.status_filters);
+		status.filter_err = Self::filter(
+			&mut self.job.ctx,
+			"status filter",
+			&status_filters,
+			|filter| filter.name(),
+			|ctx, filter| filter.accept(ctx, &task, &status),
+		);
 
-		for filter in status_filters.iter() {
-			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter.accept(&mut self.job.ctx, &task, &status)))
-				.map_err(|err| Error::StatusFilterTermByPanic {
-				name:   filter.name(),
-				source: anyhow!("{:?}", err),
-			})?;
+		Ok((status, resp))
+	}
 
-			match r {
-				Err(ExtError::Term) => return Err(Error::StatusFilterTerm { name: filter.name() }),
+	fn filter<T, NF: Fn(&T) -> &'static str, FF: Fn(&mut JobCtx<JS, TS>, &T) -> ExtResult<()>>(
+		ctx: &mut JobCtx<JS, TS>,
+		kind: &'static str,
+		filters: &Arc<Vec<T>>,
+		name_fn: NF,
+		filter_fn: FF,
+	) -> Option<Arc<ExtStatusError>> {
+		for filter in filters.iter() {
+			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter_fn(ctx, filter)));
+
+			if let Err(err) = r {
+				return Some(Arc::new(ExtStatusError::Panic {
+					kind,
+					name: name_fn(filter),
+					source: anyhow!("{:?}", err),
+				}))
+			}
+
+			match r.unwrap() {
+				Err(ExtError::Term) => return Some(Arc::new(ExtStatusError::Term { kind, name: name_fn(filter) })),
+
 				Err(ExtError::Other(err)) => {
-					trace!("error in status filter {}: {:#}", filter.name(), &err);
-					if self.term_on_error {
-						return Err(Error::StatusFilterTermByError { name: filter.name(), source: err })
-					}
+					trace!("error in {} {}: {:#}", kind, name_fn(filter), &err);
+					return Some(Arc::new(ExtStatusError::Err { kind, name: name_fn(filter), source: err }))
 				}
+
 				Ok(_) => {}
 			}
 		}
 
-		Ok((status, resp))
+		None
 	}
 
 	async fn load(
@@ -170,28 +189,19 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 		load_metrics.read_size = stats.read();
 		load_metrics.write_size = stats.write();
-
 		load_metrics.duration = status.started_at.elapsed();
 
-		for filter in self.load_filters.iter() {
-			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-				filter.accept(&self.job.ctx, &task, &status, Box::new(body.clone().reader()))
-			}))
-			.map_err(|err| Error::LoadFilterTermByPanic { name: filter.name(), source: anyhow!("{:?}", err) })?;
+		let mut load_data = LoadData { metrics: load_metrics, filter_err: None };
 
-			match r {
-				Err(ExtError::Term) => return Err(Error::LoadFilterTerm { name: filter.name() }),
-				Err(ExtError::Other(err)) => {
-					trace!("error in status filter {}: {:#}", filter.name(), &err);
-					if self.term_on_error {
-						return Err(Error::LoadFilterTermByError { name: filter.name(), source: err })
-					}
-				}
-				Ok(_) => {}
-			}
-		}
+		let load_filters = Arc::clone(&self.load_filters);
+		load_data.filter_err = Self::filter(
+			&mut self.job.ctx,
+			"load filter",
+			&load_filters,
+			|filter| filter.name(),
+			|ctx, filter| filter.accept(ctx, &task, &status, Box::new(body.clone().reader())),
+		);
 
-		let load_data = LoadData { metrics: load_metrics };
 		Ok((load_data, Box::new(body.reader())))
 	}
 
@@ -209,7 +219,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		let payload = {
 			let task = Arc::clone(&task);
 			let task_expanders = Arc::clone(&self.task_expanders);
-			let term_on_error = self.term_on_error;
 			let mut job_ctx = self.job.ctx.clone();
 			let task_state = Arc::clone(&task_state);
 			let links = Arc::clone(&links);
@@ -219,27 +228,16 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 				let t = Instant::now();
 
 				let document = document_parser(reader)?;
+				let mut follow_data =
+					FollowData { metrics: FollowMetrics { duration: t.elapsed() }, expand_err: None };
 
-				for expander in task_expanders.iter() {
-					let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-						expander.expand(&mut job_ctx, &task, &status, &document)
-					}))
-					.map_err(|err| Error::TaskExpanderTermByPanic {
-						name:   expander.name(),
-						source: anyhow!("{:?}", err),
-					})?;
-
-					match r {
-						Ok(_) => {}
-						Err(ExtError::Term) => return Err(Error::TaskExpanderTerm { name: expander.name() }),
-						Err(ExtError::Other(err)) => {
-							if term_on_error {
-								return Err(Error::TaskExpanderTermByError { name: expander.name(), source: err })
-							}
-							trace!("error in task expander {}: {:#}", expander.name(), &err);
-						}
-					}
-				}
+				follow_data.expand_err = Self::filter(
+					&mut job_ctx,
+					"task expander",
+					&task_expanders,
+					|filter| filter.name(),
+					|ctx, filter| filter.expand(ctx, &task, &status, &document),
+				);
 
 				{
 					let mut links = links.lock().unwrap();
@@ -251,7 +249,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 					*task_state = Some(job_ctx.task_state);
 				}
 
-				Ok(FollowData { metrics: FollowMetrics { duration: t.elapsed() } })
+				Ok(follow_data)
 			}
 		};
 
@@ -293,7 +291,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		{
 			match self.status(Arc::clone(&task), &client, true).await {
 				Ok((head_status, _)) => {
+					let done = head_status.filter_err.is_some();
 					status.head_status = StatusResult(Ok(head_status));
+					if done {
+						return Ok(status)
+					}
 				}
 				Err(err) => {
 					status.head_status = StatusResult(Err(err));
@@ -314,7 +316,13 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		};
 
 		let load_r = self.load(Arc::clone(&task), &get_status, stats, resp).await;
-		status.status = StatusResult(Ok(get_status.clone()));
+		{
+			let done = get_status.filter_err.is_some();
+			status.status = StatusResult(Ok(get_status.clone()));
+			if done {
+				return Ok(status)
+			}
+		}
 
 		let reader = match load_r {
 			Err(err) => {
@@ -322,7 +330,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 				return Ok(status)
 			}
 			Ok((load_data, reader)) => {
+				let done = load_data.filter_err.is_some();
 				status.load = LoadResult(Ok(load_data));
+				if done {
+					return Ok(status)
+				}
+
 				reader
 			}
 		};

@@ -91,50 +91,28 @@ pub enum Error {
 	Other(#[from] anyhow::Error),
 	#[error("timeout during loading")]
 	LoadTimeout,
-	#[error("terminated by status filter {name:?}")]
-	StatusFilterTerm { name: &'static str },
-	#[error("terminated by error in status filter(term_by_error=true) {name:?}")]
-	StatusFilterTermByError {
-		name:   &'static str,
-		#[source]
-		source: anyhow::Error,
-	},
-	#[error("terminated by panic in status filter {name:?}")]
-	StatusFilterTermByPanic {
-		name:   &'static str,
-		#[source]
-		source: anyhow::Error,
-	},
-	#[error("terminated by load filter {name:?}")]
-	LoadFilterTerm { name: &'static str },
-	#[error("terminated by error in load filter(term_by_error=true) {name:?}")]
-	LoadFilterTermByError {
-		name:   &'static str,
-		#[source]
-		source: anyhow::Error,
-	},
-	#[error("terminated by panic in load filter {name:?}")]
-	LoadFilterTermByPanic {
-		name:   &'static str,
-		#[source]
-		source: anyhow::Error,
-	},
-	#[error("terminated by task expander {name:?}")]
-	TaskExpanderTerm { name: &'static str },
-	#[error("terminated by error in task expander(term_by_error=true) {name:?}")]
-	TaskExpanderTermByError {
-		name:   &'static str,
-		#[source]
-		source: anyhow::Error,
-	},
-	#[error("terminated by panic in task expander {name:?}")]
-	TaskExpanderTermByPanic {
-		name:   &'static str,
-		#[source]
-		source: anyhow::Error,
-	},
 	#[error("operation was not requested")]
 	NotRequested {},
+}
+
+#[derive(Error, Debug)]
+pub enum ExtStatusError {
+	#[error("terminated by {kind:?} {name:?}")]
+	Term { kind: &'static str, name: &'static str },
+	#[error("error in {kind:?} {name:?}")]
+	Err {
+		kind:   &'static str,
+		name:   &'static str,
+		#[source]
+		source: anyhow::Error,
+	},
+	#[error("panic in {kind:?} {name:?}")]
+	Panic {
+		kind:   &'static str,
+		name:   &'static str,
+		#[source]
+		source: anyhow::Error,
+	},
 }
 
 pub type Result<T> = anyhow::Result<T, Error>;
@@ -208,6 +186,7 @@ pub struct HttpStatus {
 	pub code:       i32,
 	pub headers:    http::HeaderMap<http::HeaderValue>,
 	pub metrics:    StatusMetrics,
+	pub filter_err: Option<Arc<ExtStatusError>>,
 }
 
 #[derive(Clone, Default)]
@@ -230,7 +209,8 @@ pub struct FollowMetrics {
 }
 
 pub struct LoadData {
-	pub metrics: LoadMetrics,
+	pub metrics:    LoadMetrics,
+	pub filter_err: Option<Arc<ExtStatusError>>,
 }
 
 pub struct StatusResult(pub Result<HttpStatus>);
@@ -286,7 +266,8 @@ impl JobProcessing {
 }
 
 pub struct FollowData {
-	pub metrics: FollowMetrics,
+	pub metrics:    FollowMetrics,
+	pub expand_err: Option<Arc<ExtStatusError>>,
 }
 
 pub struct JobFinished {}

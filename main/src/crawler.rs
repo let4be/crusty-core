@@ -314,7 +314,6 @@ impl Crawler {
 					(*self.tx_pp).clone(),
 					Box::new(client_factory.clone()),
 					Arc::clone(&self.networking_profile.resolver),
-					true,
 				);
 
 				processor_handles.push(tokio::spawn(async move { processor.go(i).await }));
