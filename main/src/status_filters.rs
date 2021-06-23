@@ -50,7 +50,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 
 	fn accept(&self, ctx: &mut rt::JobCtx<JS, TS>, task: &rt::Task, status: &rt::HttpStatus) -> Result {
 		let sc = status.code;
-		if sc != 301 && sc != 302 && sc != 303 && sc != 307 {
+		if (300..400).contains(&sc) {
 			return Ok(())
 		}
 
