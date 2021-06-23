@@ -57,6 +57,8 @@ rand = "~0.8.0"
 
 derivative = "~2.2.0"
 core_affinity = "~0.5.10"
+strum_macros = "~0.21.1"
+
 [dev-dependencies]
 html5ever = "~0.25.1"
 markup5ever = "~0.10.1"

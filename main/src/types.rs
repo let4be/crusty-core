@@ -95,7 +95,7 @@ pub enum Error {
 	NotRequested {},
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoStaticStr)]
 pub enum FilterKind {
 	HeadStatusFilter,
 	GetStatusFilter,
@@ -142,7 +142,7 @@ pub enum JobError {
 	JobFinishedByHardTimeout,
 }
 
-#[derive(Clone, PartialEq, Debug, Copy)]
+#[derive(Clone, PartialEq, Debug, Copy, IntoStaticStr)]
 pub enum LinkTarget {
 	JustResolveDNS = 0,
 	Head           = 1,
