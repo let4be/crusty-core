@@ -95,7 +95,7 @@ pub enum Error {
 	NotRequested {},
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FilterKind {
 	HeadStatusFilter,
 	GetStatusFilter,
@@ -103,7 +103,7 @@ pub enum FilterKind {
 	FollowFilter,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ExtStatusError {
 	#[error("terminated by {kind:?} {name:?}")]
 	Term { kind: FilterKind, name: &'static str, reason: &'static str },
@@ -112,14 +112,14 @@ pub enum ExtStatusError {
 		kind:   FilterKind,
 		name:   &'static str,
 		#[source]
-		source: anyhow::Error,
+		source: Arc<anyhow::Error>,
 	},
 	#[error("panic in {kind:?} {name:?}")]
 	Panic {
 		kind:   FilterKind,
 		name:   &'static str,
 		#[source]
-		source: anyhow::Error,
+		source: Arc<anyhow::Error>,
 	},
 }
 
@@ -194,7 +194,7 @@ pub struct HttpStatus {
 	pub code:       u16,
 	pub headers:    http::HeaderMap<http::HeaderValue>,
 	pub metrics:    StatusMetrics,
-	pub filter_err: Option<Arc<ExtStatusError>>,
+	pub filter_err: Option<ExtStatusError>,
 }
 
 #[derive(Clone, Default)]
@@ -218,7 +218,7 @@ pub struct FollowMetrics {
 
 pub struct LoadData {
 	pub metrics:    LoadMetrics,
-	pub filter_err: Option<Arc<ExtStatusError>>,
+	pub filter_err: Option<ExtStatusError>,
 }
 
 pub struct StatusResult(pub Result<HttpStatus>);
@@ -275,7 +275,7 @@ impl JobProcessing {
 
 pub struct FollowData {
 	pub metrics:    FollowMetrics,
-	pub filter_err: Option<Arc<ExtStatusError>>,
+	pub filter_err: Option<ExtStatusError>,
 }
 
 pub struct JobFinished {}

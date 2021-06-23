@@ -86,26 +86,26 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		filters: &Arc<Vec<T>>,
 		name_fn: Name,
 		filter_fn: Filter,
-	) -> Option<Arc<ExtStatusError>> {
+	) -> Option<ExtStatusError> {
 		for filter in filters.iter() {
 			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter_fn(ctx, filter)));
 
 			if let Err(err) = r {
-				return Some(Arc::new(ExtStatusError::Panic {
+				return Some(ExtStatusError::Panic {
 					kind,
 					name: name_fn(filter),
-					source: anyhow!("{:?}", err),
-				}))
+					source: Arc::new(anyhow!("{:?}", err)),
+				})
 			}
 
 			match r.unwrap() {
 				Err(ExtError::Term { reason }) => {
-					return Some(Arc::new(ExtStatusError::Term { kind, reason, name: name_fn(filter) }))
+					return Some(ExtStatusError::Term { kind, reason, name: name_fn(filter) })
 				}
 
 				Err(ExtError::Other(err)) => {
 					trace!("error in {:?} {}: {:#}", kind, name_fn(filter), &err);
-					return Some(Arc::new(ExtStatusError::Err { kind, name: name_fn(filter), source: err }))
+					return Some(ExtStatusError::Err { kind, name: name_fn(filter), source: Arc::new(err) })
 				}
 
 				Ok(_) => {}
