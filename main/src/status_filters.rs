@@ -23,12 +23,7 @@ impl<'a, JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Con
 	name! {}
 
 	fn accept(&self, _ctx: &mut rt::JobCtx<JS, TS>, _task: &rt::Task, status: &rt::HttpStatus) -> Result {
-		let content_type = status
-			.headers
-			.get(http::header::CONTENT_TYPE)
-			.ok_or_else(|| anyhow!("content-type: not found"))?
-			.to_str()
-			.context("cannot read content-type value")?;
+		let content_type = status.headers.get_str(http::header::CONTENT_TYPE)?;
 		for accepted in &self.accepted {
 			if content_type.contains(accepted) {
 				return Ok(())
@@ -63,12 +58,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 			return Err(ExtError::Term { reason: MAX_REDIRECT_TERM_REASON })
 		}
 
-		let location = status
-			.headers
-			.get(http::header::LOCATION)
-			.ok_or_else(|| anyhow!("location: not found"))?
-			.to_str()
-			.context("cannot read location value")?;
+		let location = status.headers.get_str(http::header::LOCATION)?;
 
 		let link = rt::Link::new(&location, "", "", "", task.link.redirect + 1, task.link.target, &task.link)
 			.context("cannot create link")?;

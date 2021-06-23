@@ -187,10 +187,32 @@ pub struct ResolveData {
 }
 
 #[derive(Clone)]
+pub struct HeaderMap(pub http::HeaderMap<http::HeaderValue>);
+
+impl HeaderMap {
+	pub fn get_str(&self, name: http::header::HeaderName) -> anyhow::Result<&str> {
+		let name_str = String::from(name.as_str());
+		self.0
+			.get(name)
+			.ok_or_else(|| anyhow!("{}: not found", name_str))?
+			.to_str()
+			.with_context(|| format!("cannot read {} value", name_str))
+	}
+}
+
+impl Deref for HeaderMap {
+	type Target = http::HeaderMap<http::HeaderValue>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[derive(Clone)]
 pub struct HttpStatus {
 	pub started_at: Instant,
 	pub code:       u16,
-	pub headers:    http::HeaderMap<http::HeaderValue>,
+	pub headers:    HeaderMap,
 	pub metrics:    StatusMetrics,
 	pub filter_err: Option<ExtStatusError>,
 }

@@ -3,6 +3,7 @@ use crate::_prelude::*;
 use crate::types as rt;
 
 pub type Result = rt::ExtResult<()>;
+pub static CONTENT_TYPE_TERM_REASON: &str = "ContentType";
 
 pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	fn name(&self) -> &'static str {
@@ -15,6 +16,38 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 		status: &rt::HttpStatus,
 		reader: Box<dyn io::Read + Sync + Send>,
 	) -> Result;
+}
+
+pub struct ContentType<'a> {
+	accepted: Vec<&'a str>,
+}
+
+impl<'a, JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for ContentType<'a> {
+	name! {}
+
+	fn accept(
+		&self,
+		_ctx: &rt::JobCtx<JS, TS>,
+		_task: &rt::Task,
+		status: &rt::HttpStatus,
+		_reader: Box<dyn io::Read + Sync + Send>,
+	) -> Result {
+		let content_type = status.headers.get_str(http::header::CONTENT_TYPE)?;
+		for accepted in &self.accepted {
+			if content_type.contains(accepted) {
+				return Ok(())
+			}
+		}
+		Err(rt::ExtError::Term { reason: CONTENT_TYPE_TERM_REASON })
+	}
+}
+
+impl<'a> ContentType<'a> {
+	struct_name! {}
+
+	pub fn new(accepted: Vec<&'a str>) -> Self {
+		Self { accepted }
+	}
 }
 
 #[derive(Default)]

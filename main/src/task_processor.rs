@@ -158,7 +158,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		let mut status = HttpStatus {
 			started_at: t,
 			code:       rs.as_u16(),
-			headers:    resp.headers().clone(),
+			headers:    HeaderMap(resp.headers().clone()),
 			metrics:    status_metrics,
 			filter_err: None,
 		};
