@@ -1,6 +1,4 @@
-#[allow(unused_imports)]
-use crate::_prelude::*;
-use crate::{task_filters, types::*};
+use crate::{_prelude::*, task_filters, types::*};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	job:          ResolvedJob<JS, TS, P>,

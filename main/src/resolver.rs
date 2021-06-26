@@ -11,7 +11,6 @@ use trust_dns_resolver::{
 	TokioAsyncResolver,
 };
 
-#[allow(unused_imports)]
 use crate::_prelude::*;
 
 pub trait Resolver: Send + Sync + Debug + 'static {

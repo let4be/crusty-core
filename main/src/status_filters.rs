@@ -1,6 +1,4 @@
-#[allow(unused_imports)]
-use crate::_prelude::*;
-use crate::{types as rt, types::ExtError};
+use crate::{_prelude::*, types as rt, types::ExtError};
 
 pub type Result = rt::ExtResult<()>;
 

@@ -5,9 +5,8 @@ use flate2::read::GzDecoder;
 use hyper::body::HttpBody;
 use io::Read;
 
-#[allow(unused_imports)]
-use crate::_prelude::*;
 use crate::{
+	_prelude::*,
 	hyper_utils,
 	resolver::{Adaptor as ResolverAdaptor, Resolver},
 	types::*,

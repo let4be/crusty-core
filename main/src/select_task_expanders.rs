@@ -1,6 +1,4 @@
-#[allow(unused_imports)]
-use crate::_prelude::*;
-use crate::{task_expanders::*, types as rt};
+use crate::{_prelude::*, task_expanders::*, types as rt};
 
 pub fn document_parser() -> rt::DocumentParser<Document> {
 	Box::new(|reader: Box<dyn io::Read + Sync + Send>| -> rt::Result<Document> {

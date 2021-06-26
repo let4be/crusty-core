@@ -1,9 +1,8 @@
 use ipnet::Ipv4Net;
 use serde::{de, Deserialize, Deserializer};
 
-#[allow(unused_imports)]
-use crate::_prelude::*;
 use crate::{
+	_prelude::*,
 	resolver::{AsyncTrustDnsResolver, Resolver, RESERVED_V4_SUBNETS, RESERVED_V6_SUBNETS},
 	types,
 };

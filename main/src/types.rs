@@ -1,9 +1,7 @@
 use humansize::{file_size_opts, FileSize};
 use thiserror::{self, Error};
 
-#[allow(unused_imports)]
-use crate::_prelude::*;
-use crate::{config, load_filters, status_filters, task_expanders, task_filters};
+use crate::{_prelude::*, config, load_filters, status_filters, task_expanders, task_filters};
 
 pub trait ParsedDocument: 'static {}
 pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::Filter<JS, TS> + Send + Sync>>;

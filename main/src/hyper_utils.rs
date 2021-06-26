@@ -8,7 +8,6 @@ use hyper::{
 use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-#[allow(unused_imports)]
 use crate::_prelude::*;
 
 #[derive(Clone, Debug)]

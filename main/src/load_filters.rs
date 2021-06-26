@@ -1,6 +1,4 @@
-#[allow(unused_imports)]
-use crate::_prelude::*;
-use crate::types as rt;
+use crate::{_prelude::*, types as rt};
 
 pub type Result = rt::ExtResult<()>;
 pub static CONTENT_TYPE_TERM_REASON: &str = "ContentType";
