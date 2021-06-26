@@ -201,7 +201,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			FilterKind::LoadFilter,
 			&load_filters,
 			|filter| filter.name(),
-			|ctx, filter| filter.accept(ctx, &task, &status, Box::new(body.clone().reader())),
+			|ctx, filter| filter.accept(ctx, &task, status, Box::new(body.clone().reader())),
 		);
 
 		let load_data = LoadData { metrics: load_metrics, filter_err };
@@ -291,7 +291,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			|| task.link.target == LinkTarget::HeadLoad
 			|| task.link.target == LinkTarget::HeadFollow
 		{
-			match self.status(Arc::clone(&task), &client, true).await {
+			match self.status(Arc::clone(&task), client, true).await {
 				Ok((head_status, _)) => {
 					let done = head_status.filter_err.is_some();
 					status.head_status = StatusResult(Some(Ok(head_status)));
@@ -309,7 +309,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			return Ok(status)
 		}
 
-		let (get_status, resp) = match self.status(Arc::clone(&task), &client, false).await {
+		let (get_status, resp) = match self.status(Arc::clone(&task), client, false).await {
 			Err(err) => {
 				status.status = StatusResult(Some(Err(err)));
 				return Ok(status)

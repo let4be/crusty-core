@@ -226,7 +226,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		if let Some(robots) = ctx.shared.lock().unwrap().get("robots") {
 			if let Some(robots) = robots.downcast_ref::<String>() {
 				let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
-				matcher.parse(&robots);
+				matcher.parse(robots);
 				self.matcher = Some(matcher);
 			}
 		}

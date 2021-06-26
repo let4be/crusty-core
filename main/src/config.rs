@@ -149,6 +149,7 @@ impl Deref for AsyncTrustDnsResolverOptsMapping {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct AsyncTrustDnsResolverOpts {
 	pub ndots:                  usize,
 	pub timeout:                CDuration,
@@ -221,6 +222,7 @@ impl Default for AsyncTrustDnsResolverOpts {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConcurrencyProfile {
 	pub parser_concurrency: usize,
 	pub parser_pin:         usize,
@@ -249,6 +251,7 @@ impl ConcurrencyProfile {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NetworkingProfileValues {
 	pub connect_timeout:          Option<CDuration>,
 	pub socket_read_buffer_size:  Option<CBytes>,
@@ -270,6 +273,7 @@ impl Default for NetworkingProfileValues {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResolverConfig {
 	#[serde(default)]
 	config:  Option<AsyncTrustDnsResolverConfig>,
@@ -278,6 +282,7 @@ pub struct ResolverConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NetworkingProfile {
 	pub values:           NetworkingProfileValues,
 	pub resolver_config:  ResolverConfig,
@@ -342,6 +347,7 @@ impl ResolvedNetworkingProfile {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CrawlingSettings {
 	pub internal_read_buffer_size: CBytes,
 	pub concurrency:               usize,
