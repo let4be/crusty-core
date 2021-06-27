@@ -148,7 +148,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 							break
 						}
 						is_soft_timeout = true;
-						timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout);
+						let jitter_ms = {
+							let mut rng = thread_rng();
+							Duration::from_millis(rng.gen_range(0..self.job.settings.job_hard_timeout_jitter.as_millis()) as u64)
+						};
+						timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout + jitter_ms);
 					}
 				}
 			}
