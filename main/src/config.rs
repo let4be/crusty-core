@@ -357,6 +357,7 @@ pub struct CrawlingSettings {
 	pub load_timeout:              CDuration,
 	pub job_soft_timeout:          CDuration,
 	pub job_hard_timeout:          CDuration,
+	pub job_hard_timeout_jitter:   CDuration,
 	pub custom_headers:            HashMap<String, Vec<String>>,
 	pub user_agent:                Option<String>,
 	pub compression:               bool,
@@ -366,8 +367,8 @@ impl fmt::Display for CrawlingSettings {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
-			"concurrency: {}, delay: {:?}, job hard timeout: {:?}, job soft timeout: {:?}, irbs: {:?}, load timeout: {:?}, max_response_size: {:?}, custom headers: {:?}",
-			self.concurrency, self.delay, self.job_hard_timeout, self.job_soft_timeout, self.internal_read_buffer_size, self.load_timeout, self.max_response_size, self.custom_headers,
+			"concurrency: {}, delay: {:?}, job hard timeout: {:?}+~{:?}, job soft timeout: {:?}, irbs: {:?}, load timeout: {:?}, max_response_size: {:?}, custom headers: {:?}",
+			self.concurrency, self.delay, self.job_hard_timeout,  self.job_hard_timeout_jitter, self.job_soft_timeout, self.internal_read_buffer_size, self.load_timeout, self.max_response_size, self.custom_headers,
 		)
 	}
 }
@@ -378,9 +379,10 @@ impl Default for CrawlingSettings {
 			concurrency:               2,
 			internal_read_buffer_size: CBytes(32 * 1024),
 			delay:                     CDuration::from_secs(1),
-			delay_jitter:              CDuration::from_millis(1000),
-			job_hard_timeout:          CDuration::from_secs(60),
-			job_soft_timeout:          CDuration::from_secs(30),
+			delay_jitter:              CDuration::from_secs(1),
+			job_hard_timeout:          CDuration::from_secs(360),
+			job_hard_timeout_jitter:   CDuration::from_secs(72),
+			job_soft_timeout:          CDuration::from_secs(240),
 			status_timeout:            CDuration::from_secs(5),
 			load_timeout:              CDuration::from_secs(10),
 			user_agent:                Some(String::from("crusty-core/0.67.1")),
