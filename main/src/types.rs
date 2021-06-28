@@ -21,6 +21,7 @@ pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub addrs:     Option<Vec<SocketAddr>>,
 	pub settings:  Arc<config::CrawlingSettings>,
 	pub rules:     Box<dyn JobRules<JS, TS, P>>,
+	pub user_arg:  Option<u64>,
 	pub job_state: JS,
 }
 
@@ -42,11 +43,16 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 	) -> anyhow::Result<Job<JS, TS, P>> {
 		let url = Url::parse(url).context("cannot parse url")?;
 
-		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state })
+		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state, user_arg: None })
 	}
 
 	pub fn with_addrs(mut self, addrs: Vec<SocketAddr>) -> Self {
 		self.addrs = Some(addrs);
+		self
+	}
+
+	pub fn with_user_arg(mut self, user_arg: u64) -> Self {
+		self.user_arg = Some(user_arg);
 		self
 	}
 }
@@ -68,7 +74,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> From<Job<JS, TS
 			addrs:    job.addrs,
 			settings: Arc::clone(&job.settings),
 			rules:    Arc::new(job.rules),
-			ctx:      JobCtx::new(job.url, job.settings, job.job_state, TS::default()),
+			ctx:      JobCtx::new(job.url, job.settings, job.job_state, TS::default(), job.user_arg),
 		}
 	}
 }
@@ -349,11 +355,18 @@ pub struct JobCtx<JS, TS> {
 	pub shared:     JobSharedState,
 	pub job_state:  Arc<Mutex<JS>>,
 	pub task_state: TS,
+	pub user_arg:   Option<u64>,
 	links:          Vec<Arc<Link>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
-	pub fn new(root_url: Url, settings: Arc<config::CrawlingSettings>, job_state: JS, task_state: TS) -> Self {
+	pub fn new(
+		root_url: Url,
+		settings: Arc<config::CrawlingSettings>,
+		job_state: JS,
+		task_state: TS,
+		user_arg: Option<u64>,
+	) -> Self {
 		Self {
 			started_at: Instant::now(),
 			root_url,
@@ -362,6 +375,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 			job_state: Arc::new(Mutex::new(job_state)),
 			task_state,
 			links: vec![],
+			user_arg,
 		}
 	}
 
