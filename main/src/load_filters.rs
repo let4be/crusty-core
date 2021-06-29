@@ -88,7 +88,8 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				.map(|v| v.to_str())
 				.unwrap_or_else(|| Ok(""))
 				.unwrap_or("");
-			if content_type.to_lowercase() != "text/plain" {
+
+			if !content_type.to_lowercase().contains("text/plain") {
 				return Ok(())
 			}
 
