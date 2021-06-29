@@ -188,7 +188,34 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> JobRules<JS, TS
 
 #[derive(Clone)]
 struct HttpClientFactory {
-	networking_profile: config::ResolvedNetworkingProfile,
+	networking_profile:     config::ResolvedNetworkingProfile,
+	static_bind_local_ipv4: Option<Ipv4Addr>,
+	static_bind_local_ipv6: Option<Ipv6Addr>,
+}
+
+impl HttpClientFactory {
+	fn new(networking_profile: config::ResolvedNetworkingProfile) -> Self {
+		let v = &networking_profile.values;
+
+		let static_bind_local_ipv4 = if v.static_binding_within_the_task { v.rand_bind_local_ipv4() } else { None };
+		let static_bind_local_ipv6 = if v.static_binding_within_the_task { v.rand_bind_local_ipv6() } else { None };
+
+		Self { networking_profile, static_bind_local_ipv4, static_bind_local_ipv6 }
+	}
+
+	fn bind_local_ipv4(&self) -> Option<Ipv4Addr> {
+		if let Some(v) = self.static_bind_local_ipv4 {
+			return Some(v)
+		}
+		self.networking_profile.values.rand_bind_local_ipv4()
+	}
+
+	fn bind_local_ipv6(&self) -> Option<Ipv6Addr> {
+		if let Some(v) = self.static_bind_local_ipv6 {
+			return Some(v)
+		}
+		self.networking_profile.values.rand_bind_local_ipv6()
+	}
 }
 
 impl ClientFactory for HttpClientFactory {
@@ -199,29 +226,7 @@ impl ClientFactory for HttpClientFactory {
 		let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
 		http.set_connect_timeout(v.connect_timeout.map(|v| *v));
 
-		let bind_local_ipv4 = if !v.bind_local_ipv4.is_empty() {
-			if v.bind_local_ipv4.len() == 1 {
-				Some(*v.bind_local_ipv4[0])
-			} else {
-				let mut rng = thread_rng();
-				Some(*v.bind_local_ipv4[rng.gen_range(0..v.bind_local_ipv4.len())])
-			}
-		} else {
-			None
-		};
-
-		let bind_local_ipv6 = if !v.bind_local_ipv6.is_empty() {
-			if v.bind_local_ipv6.len() == 1 {
-				Some(*v.bind_local_ipv6[0])
-			} else {
-				let mut rng = thread_rng();
-				Some(*v.bind_local_ipv6[rng.gen_range(0..v.bind_local_ipv6.len())])
-			}
-		} else {
-			None
-		};
-
-		match (bind_local_ipv4, bind_local_ipv6) {
+		match (self.bind_local_ipv4(), self.bind_local_ipv6()) {
 			(Some(ipv4), Some(ipv6)) => http.set_local_addresses(ipv4, ipv6),
 			(Some(ipv4), None) => http.set_local_address(Some(IpAddr::V4(ipv4))),
 			(None, Some(ipv6)) => http.set_local_address(Some(IpAddr::V6(ipv6))),
@@ -302,7 +307,7 @@ impl Crawler {
 
 			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone());
 
-			let client_factory = HttpClientFactory { networking_profile: self.networking_profile.clone() };
+			let client_factory = HttpClientFactory::new(self.networking_profile.clone());
 
 			let mut processor_handles = vec![];
 			for i in 0..job.settings.concurrency {

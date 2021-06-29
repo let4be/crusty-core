@@ -252,21 +252,51 @@ impl ConcurrencyProfile {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkingProfileValues {
-	pub connect_timeout:          Option<CDuration>,
-	pub socket_read_buffer_size:  Option<CBytes>,
-	pub socket_write_buffer_size: Option<CBytes>,
-	pub bind_local_ipv4:          Vec<CIP4Addr>,
-	pub bind_local_ipv6:          Vec<CIP6Addr>,
+	pub connect_timeout:                Option<CDuration>,
+	pub socket_read_buffer_size:        Option<CBytes>,
+	pub socket_write_buffer_size:       Option<CBytes>,
+	pub static_binding_within_the_task: bool,
+	pub bind_local_ipv4:                Vec<CIP4Addr>,
+	pub bind_local_ipv6:                Vec<CIP6Addr>,
+}
+
+impl NetworkingProfileValues {
+	pub fn rand_bind_local_ipv4(&self) -> Option<Ipv4Addr> {
+		if !self.bind_local_ipv4.is_empty() {
+			if self.bind_local_ipv4.len() == 1 {
+				Some(*self.bind_local_ipv4[0])
+			} else {
+				let mut rng = thread_rng();
+				Some(*self.bind_local_ipv4[rng.gen_range(0..self.bind_local_ipv4.len())])
+			}
+		} else {
+			None
+		}
+	}
+
+	pub fn rand_bind_local_ipv6(&self) -> Option<Ipv6Addr> {
+		if !self.bind_local_ipv6.is_empty() {
+			if self.bind_local_ipv6.len() == 1 {
+				Some(*self.bind_local_ipv6[0])
+			} else {
+				let mut rng = thread_rng();
+				Some(*self.bind_local_ipv6[rng.gen_range(0..self.bind_local_ipv6.len())])
+			}
+		} else {
+			None
+		}
+	}
 }
 
 impl Default for NetworkingProfileValues {
 	fn default() -> Self {
 		Self {
-			connect_timeout:          Some(CDuration::from_secs(5)),
-			socket_write_buffer_size: Some(CBytes(32 * 1024)),
-			socket_read_buffer_size:  Some(CBytes(32 * 1024)),
-			bind_local_ipv4:          vec![],
-			bind_local_ipv6:          vec![],
+			connect_timeout:                Some(CDuration::from_secs(5)),
+			socket_write_buffer_size:       Some(CBytes(32 * 1024)),
+			socket_read_buffer_size:        Some(CBytes(32 * 1024)),
+			static_binding_within_the_task: true,
+			bind_local_ipv4:                vec![],
+			bind_local_ipv6:                vec![],
 		}
 	}
 }
