@@ -79,12 +79,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 		self.pages_pending -= 1;
 		self.task_seq_num += 1;
 
-		if task_response.task.link.is_waker {
-			for filter in &mut self.task_filters {
-				filter.wake(&mut self.job.ctx, &task_response);
-			}
-		}
-
 		let mut links = self.job.ctx.consume_links();
 
 		if let (JobStatus::Processing(Ok(ref r)), false) = (&task_response.status, ignore_links) {
@@ -113,7 +107,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 			self.schedule(Arc::new(task));
 		}
 
-		// TODO#13: figure a nice way to propagate errors in root tasks to Job Finished status
+		// TODO(#13): figure a nice way to propagate errors in root tasks to Job Finished status
 		/*if self.pages_pending < 1 && task_response.task.is_root() {
 
 		}*/

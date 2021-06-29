@@ -166,13 +166,13 @@ pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 
 #[derive(Clone)]
 pub struct Link {
-	pub url:             Url,
-	pub rel:             String,
-	pub alt:             String,
-	pub text:            String,
-	pub redirect:        usize,
-	pub target:          LinkTarget,
-	pub(crate) is_waker: bool,
+	pub url:      Url,
+	pub rel:      String,
+	pub alt:      String,
+	pub text:     String,
+	pub redirect: usize,
+	pub target:   LinkTarget,
+	pub marker:   u8,
 }
 
 impl Link {
@@ -433,7 +433,7 @@ impl Link {
 			text: text.trim().to_string(),
 			redirect,
 			target,
-			is_waker: false,
+			marker: 0,
 		})
 	}
 
@@ -445,7 +445,7 @@ impl Link {
 			text: text.trim().to_string(),
 			redirect,
 			target,
-			is_waker: false,
+			marker: 0,
 		}
 	}
 }

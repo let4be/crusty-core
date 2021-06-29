@@ -57,8 +57,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Redirec
 
 		let location = status.headers.get_str(http::header::LOCATION)?;
 
-		let link = rt::Link::new(location, "", "", "", task.link.redirect + 1, task.link.target, &task.link)
+		let mut link = rt::Link::new(location, "", "", "", task.link.redirect + 1, task.link.target, &task.link)
 			.context("cannot create link")?;
+		link.marker = task.link.marker;
 
 		ctx.push_links(vec![link]);
 		Err(ExtError::Term { reason: REDIRECT_TERM_REASON })

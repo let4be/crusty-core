@@ -11,7 +11,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 	}
 	fn accept(
 		&self,
-		ctx: &rt::JobCtx<JS, TS>,
+		ctx: &mut rt::JobCtx<JS, TS>,
 		task: &rt::Task,
 		status: &rt::HttpStatus,
 		reader: Box<dyn io::Read + Sync + Send>,
@@ -27,7 +27,7 @@ impl<'a, JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Con
 
 	fn accept(
 		&self,
-		_ctx: &rt::JobCtx<JS, TS>,
+		_ctx: &mut rt::JobCtx<JS, TS>,
 		_task: &rt::Task,
 		status: &rt::HttpStatus,
 		_reader: Box<dyn io::Read + Sync + Send>,
@@ -56,28 +56,49 @@ pub struct RobotsTxt {}
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsTxt {
 	fn accept(
 		&self,
-		ctx: &rt::JobCtx<JS, TS>,
+		ctx: &mut rt::JobCtx<JS, TS>,
 		task: &rt::Task,
 		status: &rt::HttpStatus,
 		mut reader: Box<dyn io::Read + Sync + Send>,
 	) -> Result {
-		if task.link.url.as_str().ends_with("robots.txt") {
+		static ROBOTS_TXT_ALLOW_EVERYTHING: &str = "User-agent: *\nAllow: /";
+
+		if task.link.marker != crate::task_filters::ROBOTS_TXT_LINK_MARKER {
+			return Ok(())
+		}
+
+		let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
+		let root_link = ctx
+			.shared
+			.lock()
+			.unwrap()
+			.get_mut("robots::root_link")
+			.unwrap()
+			.downcast_mut::<Option<rt::Link>>()
+			.unwrap()
+			.clone()
+			.unwrap();
+
+		if (400_u16..500).contains(&status.code) {
+			matcher.parse(ROBOTS_TXT_ALLOW_EVERYTHING);
+		} else {
 			let content_type = status
 				.headers
 				.get(http::header::CONTENT_TYPE)
 				.map(|v| v.to_str())
 				.unwrap_or_else(|| Ok(""))
 				.unwrap_or("");
-			if content_type.to_lowercase() == "text/plain" {
-				let mut content = String::from("");
-				let _ = reader.read_to_string(&mut content).context("cannot read robots.txt")?;
-
-				let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
-				matcher.parse(&content);
-
-				ctx.shared.lock().unwrap().insert(String::from("robots"), Box::new(Some(matcher)));
+			if content_type.to_lowercase() != "text/plain" {
+				return Ok(())
 			}
+
+			let mut content = String::from("");
+			let _ = reader.read_to_string(&mut content).context("cannot read robots.txt")?;
+			matcher.parse(&content);
 		}
+
+		ctx.shared.lock().unwrap().insert(String::from("robots::matcher"), Box::new(Some(matcher)));
+		ctx.push_links(vec![root_link].into_iter());
 
 		Ok(())
 	}
