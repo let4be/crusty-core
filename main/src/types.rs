@@ -463,7 +463,11 @@ impl Task {
 			return Err(anyhow!("invalid scheme {:#?} in {:#?}", scheme, link.url.as_str()).into())
 		}
 
-		Ok(Task { queued_at: Instant::now(), link, level: parent.level + 1 })
+		Ok(Task {
+			queued_at: Instant::now(),
+			level: if link.redirect > 0 { parent.level } else { parent.level + 1 },
+			link,
+		})
 	}
 
 	pub fn is_root(&self) -> bool {
