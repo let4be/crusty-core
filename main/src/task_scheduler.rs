@@ -50,7 +50,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 				Ok(task_filters::Action::Accept) => continue,
 				Ok(task_filters::Action::Skip) => {
 					if task.is_root() {
-						warn!(action = "skip", filter_name = %filter.name(), action);
+						info!(action = "skip", filter_name = %filter.name(), action);
 					} else {
 						debug!(action = "skip", filter_name = %filter.name(), action);
 					}
@@ -58,7 +58,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 				}
 				Err(ExtError::Term { reason }) => {
 					if task.is_root() {
-						warn!(action = "term", filter_name = %filter.name(), reason = reason, action);
+						info!(action = "term", filter_name = %filter.name(), reason = reason, action);
 					} else {
 						debug!(action = "term", filter_name = %filter.name(), reason = reason, action);
 					}
