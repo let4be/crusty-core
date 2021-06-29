@@ -18,7 +18,7 @@ pub trait Filter<JS: rt::JobStateValues, TS: rt::TaskStateValues> {
 		"no name"
 	}
 	// filters can be waked when a task with Link.waked is considered finished by a scheduler
-	fn wake(&mut self, _ctx: &mut rt::JobCtx<JS, TS>) {}
+	fn wake(&mut self, _ctx: &mut rt::JobCtx<JS, TS>, _status: &rt::JobUpdate<JS, TS>) {}
 	// the job of a filter is to determine what to do with a certain task - accept/skip
 	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> Result;
 }
@@ -79,15 +79,15 @@ pub struct HashSetDedup {
 enum RobotsTxtState {
 	#[derivative(Default)]
 	None,
-	Requested,
-	Decided,
+	FilteringEnabled,
+	FilteringSkipped,
 }
 
 #[derive(Default)]
 pub struct RobotsTxt {
-	state:       RobotsTxtState,
-	link_buffer: Vec<rt::Link>,
-	matcher:     Option<robotstxt::matcher::CachingRobotsMatcher<robotstxt::matcher::LongestMatchRobotsMatchStrategy>>,
+	state:     RobotsTxtState,
+	root_link: Option<Arc<rt::Link>>,
+	matcher:   Option<robotstxt::matcher::CachingRobotsMatcher<robotstxt::matcher::LongestMatchRobotsMatchStrategy>>,
 }
 
 #[derive(Default)]
@@ -220,25 +220,37 @@ impl HashSetDedup {
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsTxt {
 	name! {}
 
-	fn wake(&mut self, ctx: &mut rt::JobCtx<JS, TS>) {
-		if let Some(robots) = ctx.shared.lock().unwrap().get("robots") {
-			if let Some(robots) = robots.downcast_ref::<String>() {
-				let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
-				matcher.parse(robots);
-				self.matcher = Some(matcher);
+	fn wake(&mut self, ctx: &mut rt::JobCtx<JS, TS>, update: &rt::JobUpdate<JS, TS>) {
+		// by default filtering is enabled
+		// if we failed to load robots.txt due to some error - site will be disallowed as recommended by google
+		self.state = RobotsTxtState::FilteringEnabled;
+
+		if let rt::JobStatus::Processing(Ok(jp)) = &update.status {
+			if let Some(Ok(s)) = &jp.status.0 {
+				if (400_u16..500).contains(&s.code) {
+					// google advices to skip robots.txt filtering for 4xx status codes
+					self.state = RobotsTxtState::FilteringSkipped;
+				}
 			}
 		}
 
-		self.state = RobotsTxtState::Decided;
+		if let Some(robots) = ctx.shared.lock().unwrap().get_mut("robots") {
+			if let Some(ref mut matcher) = robots.downcast_mut::<Option<robotstxt::DefaultCachingMatcher>>() {
+				self.matcher = matcher.take();
+			}
+		}
 
-		let mut link_buffer: Vec<rt::Link> = vec![];
-		mem::swap(&mut link_buffer, &mut self.link_buffer);
-		ctx.push_links(link_buffer);
+		let original_root_link = self.root_link.take().unwrap();
+		ctx.push_shared_links(vec![original_root_link].into_iter());
 	}
 
 	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
-		if task.is_root() {
-			if self.state != RobotsTxtState::Requested {
+		match self.state {
+			RobotsTxtState::None => {
+				if !task.is_root() {
+					return Err(anyhow!("RobotsTxtState = None but we got non root task!").into())
+				}
+
 				let url = Url::parse(
 					format!("{}://{}/robots.txt", ctx.root_url.scheme(), ctx.root_url.host_str().unwrap()).as_str(),
 				)
@@ -246,36 +258,28 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 
 				let mut link = rt::Link::new_abs(url, "", "", "", 0, rt::LinkTarget::Load);
 				link.is_waker = true;
-				ctx.push_links(vec![link]);
+				let mut link = Arc::new(link);
 
-				self.state = RobotsTxtState::Requested;
+				mem::swap(&mut link, &mut task.link);
+				self.root_link = Some(link);
+
+				Ok(Action::Accept)
 			}
-			return Ok(Action::Accept)
-		}
-
-		if self.state == RobotsTxtState::Decided {
-			if let Some(ref mut matcher) = &mut self.matcher {
-				if !matcher.one_agent_allowed_by_robots(
-					ctx.settings.user_agent.as_deref().unwrap_or(""),
-					task.link.url.as_str(),
-				) {
-					trace!("robots.txt resolved(loaded): SKIPPING");
+			RobotsTxtState::FilteringSkipped => Ok(Action::Accept),
+			RobotsTxtState::FilteringEnabled => {
+				if let Some(ref mut matcher) = &mut self.matcher {
+					let user_agent = ctx.settings.user_agent.as_deref().unwrap_or("");
+					if matcher.one_agent_allowed_by_robots(user_agent, task.link.url.as_str()) {
+						return Ok(Action::Accept)
+					}
 					return Ok(Action::Skip)
 				}
-				trace!("robots.txt resolved(loaded): ACCEPTING");
-				return Ok(Action::Accept)
+
+				// looks like there was some error during filter construction
+				// whatever it is - we should skip the website UNLESS we got 4xx code(handled by FilteringSkipped state)
+				Ok(Action::Skip)
 			}
-
-			trace!("robots.txt resolved(not loaded): ACCEPTING");
-			return Ok(Action::Accept)
 		}
-
-		if task.link.url.as_str().ends_with("/robots.txt") {
-			return Ok(Action::Accept)
-		}
-
-		self.link_buffer.push((*task.link).clone());
-		Ok(Action::Skip)
 	}
 }
 

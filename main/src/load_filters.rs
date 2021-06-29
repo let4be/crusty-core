@@ -1,3 +1,5 @@
+use robotstxt_with_cache as robotstxt;
+
 use crate::{_prelude::*, types as rt};
 
 pub type Result = rt::ExtResult<()>;
@@ -70,7 +72,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				let mut content = String::from("");
 				let _ = reader.read_to_string(&mut content).context("cannot read robots.txt")?;
 
-				ctx.shared.lock().unwrap().insert(String::from("robots"), Box::new(content));
+				let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
+				matcher.parse(&content);
+
+				ctx.shared.lock().unwrap().insert(String::from("robots"), Box::new(Some(matcher)));
 			}
 		}
 

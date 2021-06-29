@@ -81,7 +81,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 
 		if task_response.task.link.is_waker {
 			for filter in &mut self.task_filters {
-				filter.wake(&mut self.job.ctx);
+				filter.wake(&mut self.job.ctx, &task_response);
 			}
 		}
 
