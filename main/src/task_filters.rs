@@ -86,7 +86,7 @@ enum RobotsTxtState {
 #[derive(Default)]
 pub struct RobotsTxt {
 	state:     RobotsTxtState,
-	root_link: Option<Arc<rt::Link>>,
+	root_link: Option<rt::Link>,
 	matcher:   Option<robotstxt::matcher::CachingRobotsMatcher<robotstxt::matcher::LongestMatchRobotsMatchStrategy>>,
 }
 
@@ -240,8 +240,10 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 			}
 		}
 
-		let original_root_link = self.root_link.take().unwrap();
-		ctx.push_shared_links(vec![original_root_link].into_iter());
+		let mut original_root_link = self.root_link.take().unwrap();
+		// treat this link "as a redirect" from robots.txt, this way it retains root task status
+		original_root_link.redirect = 1;
+		ctx.push_links(vec![original_root_link].into_iter());
 	}
 
 	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _: usize, task: &mut rt::Task) -> Result {
@@ -261,7 +263,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				let mut link = Arc::new(link);
 
 				mem::swap(&mut link, &mut task.link);
-				self.root_link = Some(link);
+				self.root_link = Some((*link).clone());
 
 				Ok(Action::Accept)
 			}
