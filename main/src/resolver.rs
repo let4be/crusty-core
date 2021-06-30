@@ -13,8 +13,9 @@ use trust_dns_resolver::{
 
 use crate::_prelude::*;
 
+pub type ResolveResult = Result<IntoIter<SocketAddr>, io::Error>;
 pub trait Resolver: Send + Sync + Debug + 'static {
-	fn resolve(&self, host: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>>;
+	fn resolve(&self, host: &str) -> PinnedFut<ResolveResult>;
 }
 
 #[derive(Clone, Debug)]
@@ -23,10 +24,45 @@ pub struct AsyncStaticResolver {
 }
 
 #[derive(Clone, Debug)]
+pub struct AsyncChannelResolver {
+	tx:      Sender<AsyncResolveRequest>,
+	timeout: Duration,
+}
+
+#[derive(Clone, Debug)]
 pub struct AsyncTrustDnsResolver {
 	resolver:         Arc<TokioAsyncResolver>,
 	net_v4_blacklist: Arc<Vec<Ipv4Net>>,
 	net_v6_blacklist: Arc<Vec<Ipv6Net>>,
+}
+
+pub struct AsyncResolveRequest {
+	pub name: String,
+	pub tx:   Sender<ResolveResult>,
+}
+
+impl AsyncResolveRequest {
+	fn new(name: &str) -> (Self, Receiver<ResolveResult>) {
+		let (tx, rx) = bounded_ch(1);
+		(Self { name: String::from(name), tx }, rx)
+	}
+}
+
+impl AsyncStaticResolver {
+	pub fn new(addrs: Vec<SocketAddr>) -> Self {
+		Self { addrs }
+	}
+}
+
+impl AsyncChannelResolver {
+	pub fn new(tx: Sender<AsyncResolveRequest>, timeout: Duration) -> Self {
+		Self { tx, timeout }
+	}
+
+	async fn resolve(&self, req: AsyncResolveRequest, rx: Receiver<ResolveResult>) -> ResolveResult {
+		self.tx.send_async(req).await.map_err(|err| io::Error::new(io::ErrorKind::Interrupted, err))?;
+		rx.recv_async().await.map_err(|err| io::Error::new(io::ErrorKind::Interrupted, err))?
+	}
 }
 
 impl AsyncTrustDnsResolver {
@@ -45,14 +81,29 @@ impl AsyncTrustDnsResolver {
 	}
 }
 
-impl AsyncStaticResolver {
-	pub fn new(addrs: Vec<SocketAddr>) -> Self {
-		Self { addrs }
+impl Resolver for AsyncStaticResolver {
+	fn resolve(&self, _name: &str) -> PinnedFut<ResolveResult> {
+		let resolver = self.clone();
+
+		Box::pin(async move { Ok(resolver.addrs.into_iter()) })
+	}
+}
+
+impl Resolver for AsyncChannelResolver {
+	fn resolve(&self, name: &str) -> PinnedFut<ResolveResult> {
+		let resolver = self.clone();
+		let (req, rx) = AsyncResolveRequest::new(name);
+
+		Box::pin(async move {
+			timeout(resolver.timeout, resolver.resolve(req, rx))
+				.await
+				.map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?
+		})
 	}
 }
 
 impl Resolver for AsyncTrustDnsResolver {
-	fn resolve(&self, name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
+	fn resolve(&self, name: &str) -> PinnedFut<ResolveResult> {
 		let resolver = self.clone();
 
 		let name = name.to_string();
@@ -107,14 +158,6 @@ impl Resolver for AsyncTrustDnsResolver {
 
 			Ok(out_addrs.into_iter())
 		})
-	}
-}
-
-impl Resolver for AsyncStaticResolver {
-	fn resolve(&self, _name: &str) -> PinnedFut<Result<IntoIter<SocketAddr>, io::Error>> {
-		let resolver = self.clone();
-
-		Box::pin(async move { Ok(resolver.addrs.into_iter()) })
 	}
 }
 
