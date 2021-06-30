@@ -1,4 +1,10 @@
-use crate::{_prelude::*, task_filters, types::*};
+use crate::{
+	_prelude::*,
+	hyper_utils::Stats,
+	task_filters,
+	task_processor::{ClientFactory, HttpClient, TaskProcessor},
+	types::*,
+};
 
 pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	job:          ResolvedJob<JS, TS, P>,
@@ -7,27 +13,22 @@ pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	task_seq_num:  usize,
 	pages_pending: usize,
 
-	tasks_tx:                 Sender<Arc<Task>>,
-	pub(crate) tasks_rx:      Receiver<Arc<Task>>,
-	pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
-	job_update_rx:            Receiver<JobUpdate<JS, TS>>,
-	update_tx:                Sender<JobUpdate<JS, TS>>,
+	backend:   Box<dyn Backend<JS, TS> + Send + Sync + 'static>,
+	update_tx: Sender<JobUpdate<JS, TS>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<JS, TS, P> {
-	pub(crate) fn new(job: ResolvedJob<JS, TS, P>, update_tx: Sender<JobUpdate<JS, TS>>) -> TaskScheduler<JS, TS, P> {
-		let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
-		let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
-
+	pub(crate) fn new(
+		job: ResolvedJob<JS, TS, P>,
+		update_tx: Sender<JobUpdate<JS, TS>>,
+		backend: Box<dyn Backend<JS, TS> + Send + Sync + 'static>,
+	) -> TaskScheduler<JS, TS, P> {
 		TaskScheduler {
 			task_filters: job.rules.task_filters(),
 			job,
 			task_seq_num: 0,
 			pages_pending: 0,
-			tasks_tx,
-			tasks_rx,
-			job_update_tx,
-			job_update_rx,
+			backend,
 			update_tx,
 		}
 	}
@@ -35,10 +36,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 	fn schedule(&mut self, task: Arc<Task>) {
 		self.pages_pending += 1;
 
-		let r = self.tasks_tx.send(task);
-		if r.is_err() {
-			panic!("cannot send task to tasks_tx! should never ever happen!")
-		}
+		self.backend.schedule(task);
 	}
 
 	fn schedule_filter(&mut self, task: &mut Task) -> task_filters::Result {
@@ -137,8 +135,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 
 			while self.pages_pending > 0 {
 				tokio::select! {
-					res = self.job_update_rx.recv_async() => {
-						self.process_task_response(res.unwrap(), is_soft_timeout).await;
+					res = self.backend.next_update() => {
+						self.process_task_response(res, is_soft_timeout).await;
 					}
 
 					_ = &mut timeout => {
@@ -167,5 +165,99 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 			Ok(JobUpdate { task: root_task, status, ctx: self.job.ctx })
 		})
 		.instrument())
+	}
+}
+
+pub trait Backend<JS: JobStateValues, TS: TaskStateValues> {
+	fn schedule(&mut self, task: Arc<Task>);
+	fn next_update(&mut self) -> PinnedFutLT<JobUpdate<JS, TS>>;
+}
+
+pub trait Binding<JS: JobStateValues, TS: TaskStateValues> {
+	fn is_disconnected(&self) -> bool;
+	fn next_task(&mut self) -> Option<Arc<Task>>;
+	fn update(&mut self, update: JobUpdate<JS, TS>);
+}
+
+pub(crate) struct ChBackend<JS: JobStateValues, TS: TaskStateValues> {
+	tasks_tx:      Sender<Arc<Task>>,
+	tasks_rx:      Receiver<Arc<Task>>,
+	job_update_tx: Sender<JobUpdate<JS, TS>>,
+	job_update_rx: Receiver<JobUpdate<JS, TS>>,
+}
+
+pub(crate) struct ChBinding<JS: JobStateValues, TS: TaskStateValues> {
+	tasks_rx:      Receiver<Arc<Task>>,
+	job_update_tx: Sender<JobUpdate<JS, TS>>,
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> ChBackend<JS, TS> {
+	pub(crate) fn new() -> Self {
+		let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
+		let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
+
+		Self { tasks_tx, tasks_rx, job_update_tx, job_update_rx }
+	}
+
+	pub(crate) fn bind(&self) -> ChBinding<JS, TS> {
+		ChBinding { tasks_rx: self.tasks_rx.clone(), job_update_tx: self.job_update_tx.clone() }
+	}
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> Backend<JS, TS> for ChBackend<JS, TS> {
+	fn schedule(&mut self, task: Arc<Task>) {
+		let r = self.tasks_tx.send(task);
+		if r.is_err() {
+			panic!("cannot send task to tasks_tx! should never ever happen!")
+		}
+	}
+
+	fn next_update(&mut self) -> PinnedFut<JobUpdate<JS, TS>> {
+		let job_update_rx = self.job_update_rx.clone();
+		Box::pin(async move { job_update_rx.recv_async().await.unwrap() })
+	}
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> Binding<JS, TS> for ChBinding<JS, TS> {
+	fn is_disconnected(&self) -> bool {
+		self.tasks_rx.is_disconnected()
+	}
+
+	fn next_task(&mut self) -> Option<Arc<Task>> {
+		self.tasks_rx.try_recv().ok()
+	}
+
+	fn update(&mut self, update: JobUpdate<JS, TS>) {
+		let _ = self.job_update_tx.send(update);
+	}
+}
+
+pub(crate) struct SyncBackend<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
+	tasks:     Vec<Arc<Task>>,
+	processor: TaskProcessor<JS, TS, P>,
+	client:    HttpClient,
+	stats:     Stats,
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> SyncBackend<JS, TS, P> {
+	pub(crate) fn new(processor: TaskProcessor<JS, TS, P>, client_factory: Box<dyn ClientFactory>) -> Self {
+		let (client, stats) = client_factory.make();
+
+		Self { tasks: vec![], processor, client, stats }
+	}
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Backend<JS, TS> for SyncBackend<JS, TS, P> {
+	fn schedule(&mut self, task: Arc<Task>) {
+		self.tasks.push(task);
+	}
+
+	fn next_update(&mut self) -> PinnedFutLT<JobUpdate<JS, TS>> {
+		let task = self.tasks.pop().unwrap();
+
+		let processor = &mut self.processor;
+		let client = &self.client;
+		let mut stats = &mut self.stats;
+		Box::pin(async move { processor.invoke_task(task, client, &mut stats).await })
 	}
 }

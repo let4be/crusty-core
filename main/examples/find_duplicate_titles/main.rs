@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use crusty_core::{prelude::*, select_task_expanders::FollowLinks};
+use crusty_core::{config::CrawlingSettings, prelude::*, select_task_expanders::FollowLinks};
 use tracing::{info, Level};
 
 type Result<T> = anyhow::Result<T>;
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, tx_pp);
 
-    let settings = config::CrawlingSettings::default();
+    let settings = CrawlingSettings { concurrency: 1, ..config::CrawlingSettings::default() };
     let rules_options =
         CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
     let rules = CrawlingRules::new(rules_options, document_parser())

@@ -1,5 +1,5 @@
 pub use std::{
-	cell::RefCell,
+	cell::{Cell, RefCell},
 	collections::{HashMap, HashSet, LinkedList},
 	fmt,
 	fmt::Debug,
@@ -24,3 +24,4 @@ pub use tracing_tools::{span, TaskFut, TracingTask};
 pub use url::Url;
 
 pub type PinnedFut<T> = Pin<Box<dyn Future<Output = T> + Send>>;
+pub type PinnedFutLT<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

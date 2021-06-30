@@ -9,6 +9,7 @@ use crate::{
 	_prelude::*,
 	hyper_utils,
 	resolver::{Adaptor as ResolverAdaptor, Resolver},
+	task_scheduler,
 	types::*,
 };
 
@@ -27,8 +28,6 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	task_expanders:  Arc<TaskExpanders<JS, TS, P>>,
 	document_parser: Arc<DocumentParser<P>>,
 
-	tx:             Sender<JobUpdate<JS, TS>>,
-	tasks_rx:       Receiver<Arc<Task>>,
 	parse_tx:       Sender<ParserTask>,
 	client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
 	resolver:       Arc<Box<dyn Resolver>>,
@@ -37,8 +36,6 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: Pars
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<JS, TS, P> {
 	pub(crate) fn new(
 		job: ResolvedJob<JS, TS, P>,
-		tx: Sender<JobUpdate<JS, TS>>,
-		tasks_rx: Receiver<Arc<Task>>,
 		parse_tx: Sender<ParserTask>,
 		client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
 		resolver: Arc<Box<dyn Resolver>>,
@@ -49,8 +46,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			task_expanders: Arc::new(job.rules.task_expanders()),
 			document_parser: job.rules.document_parser(),
 			job,
-			tx,
-			tasks_rx,
 			parse_tx,
 			client_factory,
 			resolver,
@@ -354,7 +349,36 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(status)
 	}
 
-	pub(crate) fn go<'a>(mut self, n: usize) -> TaskFut<'a> {
+	pub(crate) async fn invoke_task(
+		&mut self,
+		task: Arc<Task>,
+		client: &HttpClient,
+		stats: &mut hyper_utils::Stats,
+	) -> JobUpdate<JS, TS> {
+		stats.reset();
+
+		let mut status_r = self.process_task(Arc::clone(&task), client, stats).await;
+		if let Ok(ref mut status_data) = status_r {
+			status_data.links.extend(self.job.ctx.consume_links());
+		}
+
+		if self.job.settings.delay.as_millis() > 0 || self.job.settings.delay_jitter.as_millis() > 0 {
+			let jitter_ms = {
+				let mut rng = thread_rng();
+				Duration::from_millis(rng.gen_range(0..self.job.settings.delay_jitter.as_millis()) as u64)
+			};
+
+			time::sleep(*self.job.settings.delay + jitter_ms).await
+		}
+
+		JobUpdate { task, status: JobStatus::Processing(status_r), ctx: self.job.ctx.clone() }
+	}
+
+	pub(crate) fn go<'a>(
+		mut self,
+		n: usize,
+		mut binding: Box<dyn task_scheduler::Binding<JS, TS> + Send + Sync + 'static>,
+	) -> TaskFut<'a> {
 		TracingTask::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
 
@@ -364,36 +388,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			};
 			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout + jitter_ms);
 
-			while let Ok(task) = self.tasks_rx.recv_async().await {
-				if self.tasks_rx.is_disconnected() {
-					break
-				}
-
-				stats.reset();
-
-				tokio::select! {
-					mut status_r = self.process_task(Arc::clone(&task), &client, &stats) => {
-						if let Ok(ref mut status_data) = status_r {
-							status_data.links.extend(self.job.ctx.consume_links());
-						}
-
-						let _ = self.tx.send_async(JobUpdate {
-							task,
-							status: JobStatus::Processing(status_r),
-							ctx: self.job.ctx.clone(),
-						}).await;
-					}
-					_ = &mut timeout => break
-				}
-
-				if self.job.settings.delay.as_millis() > 0 || self.job.settings.delay_jitter.as_millis() > 0 {
-					let jitter_ms = {
-						let mut rng = thread_rng();
-						Duration::from_millis(rng.gen_range(0..self.job.settings.delay_jitter.as_millis()) as u64)
-					};
-
+			while !binding.is_disconnected() {
+				while let Some(task) = binding.next_task() {
 					tokio::select! {
-						_ = time::sleep(*self.job.settings.delay + jitter_ms) => {}
+						r = self.invoke_task(task, &client, &mut stats) => binding.update(r),
 						_ = &mut timeout => break
 					}
 				}

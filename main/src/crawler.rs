@@ -304,32 +304,45 @@ impl Crawler {
 	) -> TaskFut {
 		TracingTask::new(span!(url=%job.url), async move {
 			let job = ResolvedJob::from(job);
-
-			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone());
-
 			let client_factory = HttpClientFactory::new(self.networking_profile.clone());
-
 			let mut processor_handles = vec![];
-			for i in 0..job.settings.concurrency {
-				let processor = TaskProcessor::new(
-					job.clone(),
-					scheduler.job_update_tx.clone(),
-					scheduler.tasks_rx.clone(),
-					(*self.tx_pp).clone(),
-					Box::new(client_factory.clone()),
-					Arc::clone(&self.networking_profile.resolver),
-				);
 
-				processor_handles.push(tokio::spawn(async move { processor.go(i).await }));
-			}
+			let processors = (0..job.settings.concurrency)
+				.map(|_| {
+					TaskProcessor::new(
+						job.clone(),
+						(*self.tx_pp).clone(),
+						Box::new(client_factory.clone()),
+						Arc::clone(&self.networking_profile.resolver),
+					)
+				})
+				.collect::<Vec<_>>();
 
+			let scheduler_backend: Box<dyn Backend<JS, TS> + Send + Sync + 'static> = if job.settings.concurrency == 1 {
+				let scheduler_backend = ChBackend::new();
+
+				for (i, processor) in processors.into_iter().enumerate() {
+					let binding = Box::new(scheduler_backend.bind());
+					processor_handles.push(tokio::spawn(async move { processor.go(i, binding).await }));
+				}
+
+				Box::new(scheduler_backend)
+			} else {
+				let processor = processors.into_iter().next().unwrap();
+				let scheduler_backend = SyncBackend::new(processor, Box::new(client_factory));
+				Box::new(scheduler_backend)
+			};
+
+			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone(), scheduler_backend);
 			let job_finishing_update = scheduler.go()?.await?;
 
-			trace!("Waiting for workers to finish...");
-			for h in processor_handles {
-				let _ = h.await?;
+			if !processor_handles.is_empty() {
+				trace!("Waiting for workers to finish...");
+				for h in processor_handles {
+					let _ = h.await?;
+				}
+				trace!("Workers are done - sending notification about job done!");
 			}
-			trace!("Workers are done - sending notification about job done!");
 
 			let _ = update_tx.send_async(job_finishing_update).await;
 			Ok(())
