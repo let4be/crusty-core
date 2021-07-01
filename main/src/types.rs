@@ -451,8 +451,8 @@ impl Link {
 }
 
 impl Task {
-	pub(crate) fn new_root(url: &Url) -> Result<Task> {
-		let link = Arc::new(Link::new_abs(url.clone(), "", "", "", 0, LinkTarget::Follow));
+	pub(crate) fn new_root(url: &Url, link_target: LinkTarget) -> Result<Task> {
+		let link = Arc::new(Link::new_abs(url.clone(), "", "", "", 0, link_target));
 
 		Ok(Task { queued_at: Instant::now(), link, level: 0 })
 	}

@@ -13,8 +13,9 @@ pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	task_seq_num:  usize,
 	pages_pending: usize,
 
-	backend:   Box<dyn Backend<JS, TS> + Send + Sync + 'static>,
-	update_tx: Sender<JobUpdate<JS, TS>>,
+	backend:          Box<dyn Backend<JS, TS> + Send + Sync + 'static>,
+	update_tx:        Sender<JobUpdate<JS, TS>>,
+	root_link_target: LinkTarget,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<JS, TS, P> {
@@ -22,8 +23,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 		job: ResolvedJob<JS, TS, P>,
 		update_tx: Sender<JobUpdate<JS, TS>>,
 		backend: Box<dyn Backend<JS, TS> + Send + Sync + 'static>,
+		root_link_target: LinkTarget,
 	) -> TaskScheduler<JS, TS, P> {
 		TaskScheduler {
+			root_link_target,
 			task_filters: job.rules.task_filters(),
 			job,
 			task_seq_num: 0,
@@ -114,7 +117,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 	}
 
 	pub(crate) fn go<'a>(mut self) -> Result<TaskFut<'a, JobUpdate<JS, TS>>> {
-		let mut root_task = Task::new_root(&self.job.url)?;
+		let mut root_task = Task::new_root(&self.job.url, self.root_link_target)?;
 
 		Ok(TracingTask::new(span!(url = %self.job.url), async move {
 			trace!(

@@ -147,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
     let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, tx_pp);
+    let crawler = Crawler::new(networking_profile, tx_pp, LinkTarget::Follow);
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
