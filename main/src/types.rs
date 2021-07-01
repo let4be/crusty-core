@@ -17,12 +17,13 @@ pub type BoxedLoadFilter<JS, TS> = BoxedFn<dyn load_filters::Filter<JS, TS> + Se
 pub type BoxedTaskExpander<JS, TS, P> = BoxedFn<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
-	pub url:       url::Url,
-	pub addrs:     Option<Vec<SocketAddr>>,
-	pub settings:  Arc<config::CrawlingSettings>,
-	pub rules:     Box<dyn JobRules<JS, TS, P>>,
-	pub user_arg:  Option<u64>,
-	pub job_state: JS,
+	pub url:         url::Url,
+	pub addrs:       Option<Vec<SocketAddr>>,
+	pub settings:    Arc<config::CrawlingSettings>,
+	pub rules:       Box<dyn JobRules<JS, TS, P>>,
+	pub user_arg:    Option<u64>,
+	pub job_state:   JS,
+	pub link_target: LinkTarget,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> {
@@ -31,8 +32,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 		settings: config::CrawlingSettings,
 		rules: R,
 		job_state: JS,
+		link_target: LinkTarget,
 	) -> anyhow::Result<Job<JS, TS, P>> {
-		Self::new_with_shared_settings(url, Arc::new(settings), rules, job_state)
+		Self::new_with_shared_settings(url, Arc::new(settings), rules, job_state, link_target)
 	}
 
 	pub fn new_with_shared_settings<R: JobRules<JS, TS, P>>(
@@ -40,10 +42,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 		settings: Arc<config::CrawlingSettings>,
 		rules: R,
 		job_state: JS,
+		link_target: LinkTarget,
 	) -> anyhow::Result<Job<JS, TS, P>> {
 		let url = Url::parse(url).context("cannot parse url")?;
 
-		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state, user_arg: None })
+		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state, user_arg: None, link_target })
 	}
 
 	pub fn with_addrs(mut self, addrs: Vec<SocketAddr>) -> Self {
@@ -60,21 +63,23 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""))]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
-	pub url:      url::Url,
-	pub addrs:    Option<Vec<SocketAddr>>,
-	pub settings: Arc<config::CrawlingSettings>,
-	pub rules:    Arc<Box<dyn JobRules<JS, TS, P>>>,
-	pub ctx:      JobCtx<JS, TS>,
+	pub url:         url::Url,
+	pub addrs:       Option<Vec<SocketAddr>>,
+	pub settings:    Arc<config::CrawlingSettings>,
+	pub rules:       Arc<Box<dyn JobRules<JS, TS, P>>>,
+	pub ctx:         JobCtx<JS, TS>,
+	pub link_target: LinkTarget,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> From<Job<JS, TS, P>> for ResolvedJob<JS, TS, P> {
 	fn from(job: Job<JS, TS, P>) -> ResolvedJob<JS, TS, P> {
 		ResolvedJob {
-			url:      job.url.clone(),
-			addrs:    job.addrs,
-			settings: Arc::clone(&job.settings),
-			rules:    Arc::new(job.rules),
-			ctx:      JobCtx::new(job.url, job.settings, job.job_state, TS::default(), job.user_arg),
+			url:         job.url.clone(),
+			addrs:       job.addrs,
+			settings:    Arc::clone(&job.settings),
+			rules:       Arc::new(job.rules),
+			ctx:         JobCtx::new(job.url, job.settings, job.job_state, TS::default(), job.user_arg),
+			link_target: job.link_target,
 		}
 	}
 }

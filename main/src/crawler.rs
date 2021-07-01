@@ -247,7 +247,6 @@ impl ClientFactory for HttpClientFactory {
 pub struct Crawler {
 	networking_profile: config::ResolvedNetworkingProfile,
 	tx_pp:              Arc<Sender<ParserTask>>,
-	root_link_target:   LinkTarget,
 }
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues> {
@@ -275,17 +274,13 @@ impl Crawler {
 		let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
 		let networking_profile = config::NetworkingProfile::default().resolve()?;
-		Ok(Crawler::new(networking_profile, tx_pp, LinkTarget::Follow))
+		Ok(Crawler::new(networking_profile, tx_pp))
 	}
 }
 
 impl Crawler {
-	pub fn new(
-		networking_profile: config::ResolvedNetworkingProfile,
-		tx_pp: Arc<Sender<ParserTask>>,
-		root_link_target: LinkTarget,
-	) -> Crawler {
-		Crawler { networking_profile, tx_pp, root_link_target }
+	pub fn new(networking_profile: config::ResolvedNetworkingProfile, tx_pp: Arc<Sender<ParserTask>>) -> Crawler {
+		Crawler { networking_profile, tx_pp }
 	}
 
 	pub fn iter<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument>(
@@ -338,8 +333,7 @@ impl Crawler {
 				Box::new(scheduler_backend)
 			};
 
-			let scheduler =
-				TaskScheduler::new(job.clone(), update_tx.clone(), scheduler_backend, self.root_link_target);
+			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone(), scheduler_backend);
 			let job_finishing_update = scheduler.go()?.await?;
 
 			if !processor_handles.is_empty() {
@@ -396,10 +390,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone()))),
 				};
 
-				let crawler = Crawler::new(np_static, tx_pp, self.root_link_target);
+				let crawler = Crawler::new(np_static, tx_pp);
 				let _ = crawler.go(job, self.update_tx.clone()).await;
 			} else {
-				let crawler = Crawler::new(np, tx_pp, self.root_link_target);
+				let crawler = Crawler::new(np, tx_pp);
 				let _ = crawler.go(job, self.update_tx.clone()).await;
 			}
 		}

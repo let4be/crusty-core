@@ -147,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
     let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, tx_pp, LinkTarget::Follow);
+    let crawler = Crawler::new(networking_profile, tx_pp);
 
     let settings = config::CrawlingSettings::default();
     let rules_opt = CrawlingRulesOptions::default();
@@ -155,7 +155,13 @@ async fn main() -> anyhow::Result<()> {
         .with_task_expander(|| DataExtractor {})
         .with_task_expander(|| LinkExtractor {});
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
+    let job = Job::new(
+        "https://example.com",
+        settings,
+        rules,
+        JobState::default(),
+        LinkTarget::HeadFollow,
+    )?;
     for r in crawler.iter(job) {
         println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
