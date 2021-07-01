@@ -115,6 +115,7 @@ async fn main() -> Result<()> {
     let crawler = Crawler::new(networking_profile, tx_pp);
 
     let settings = CrawlingSettings { concurrency: 1, ..config::CrawlingSettings::default() };
+
     let rules_options =
         CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
     let rules = CrawlingRules::new(rules_options, document_parser())

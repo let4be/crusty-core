@@ -174,8 +174,7 @@ pub trait Backend<JS: JobStateValues, TS: TaskStateValues> {
 }
 
 pub trait Binding<JS: JobStateValues, TS: TaskStateValues> {
-	fn is_disconnected(&self) -> bool;
-	fn next_task(&mut self) -> Option<Arc<Task>>;
+	fn next_task(&mut self) -> PinnedFutLT<Option<Arc<Task>>>;
 	fn update(&mut self, update: JobUpdate<JS, TS>);
 }
 
@@ -219,12 +218,14 @@ impl<JS: JobStateValues, TS: TaskStateValues> Backend<JS, TS> for ChBackend<JS, 
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> Binding<JS, TS> for ChBinding<JS, TS> {
-	fn is_disconnected(&self) -> bool {
-		self.tasks_rx.is_disconnected()
-	}
-
-	fn next_task(&mut self) -> Option<Arc<Task>> {
-		self.tasks_rx.try_recv().ok()
+	fn next_task(&mut self) -> PinnedFutLT<Option<Arc<Task>>> {
+		let tasks_rx = self.tasks_rx.clone();
+		Box::pin(async move {
+			if tasks_rx.is_disconnected() {
+				return None
+			}
+			tasks_rx.recv_async().await.ok()
+		})
 	}
 
 	fn update(&mut self, update: JobUpdate<JS, TS>) {

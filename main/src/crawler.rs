@@ -319,6 +319,10 @@ impl Crawler {
 				.collect::<Vec<_>>();
 
 			let scheduler_backend: Box<dyn Backend<JS, TS> + Send + Sync + 'static> = if job.settings.concurrency == 1 {
+				let processor = processors.into_iter().next().unwrap();
+				let scheduler_backend = SyncBackend::new(processor, Box::new(client_factory));
+				Box::new(scheduler_backend)
+			} else {
 				let scheduler_backend = ChBackend::new();
 
 				for (i, processor) in processors.into_iter().enumerate() {
@@ -326,10 +330,6 @@ impl Crawler {
 					processor_handles.push(tokio::spawn(async move { processor.go(i, binding).await }));
 				}
 
-				Box::new(scheduler_backend)
-			} else {
-				let processor = processors.into_iter().next().unwrap();
-				let scheduler_backend = SyncBackend::new(processor, Box::new(client_factory));
 				Box::new(scheduler_backend)
 			};
 

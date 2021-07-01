@@ -368,7 +368,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 				Duration::from_millis(rng.gen_range(0..self.job.settings.delay_jitter.as_millis()) as u64)
 			};
 
-			time::sleep(*self.job.settings.delay + jitter_ms).await
+			time::sleep(*self.job.settings.delay + jitter_ms).await;
 		}
 
 		JobUpdate { task, status: JobStatus::Processing(status_r), ctx: self.job.ctx.clone() }
@@ -388,12 +388,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			};
 			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout + jitter_ms);
 
-			while !binding.is_disconnected() {
-				while let Some(task) = binding.next_task() {
-					tokio::select! {
-						r = self.invoke_task(task, &client, &mut stats) => binding.update(r),
-						_ = &mut timeout => break
-					}
+			while let Some(task) = binding.next_task().await {
+				tokio::select! {
+					r = self.invoke_task(task, &client, &mut stats) => {
+						binding.update(r);
+					},
+					_ = &mut timeout => break
 				}
 			}
 
