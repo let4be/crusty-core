@@ -359,7 +359,6 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocume
 	tx_pp:               Arc<Sender<ParserTask>>,
 	concurrency_profile: config::ConcurrencyProfile,
 	networking_profile:  config::ResolvedNetworkingProfile,
-	root_link_target:    LinkTarget,
 }
 
 pub type MultiCrawlerTuple<JS, TS, P> = (MultiCrawler<JS, TS, P>, Sender<Job<JS, TS, P>>, Receiver<JobUpdate<JS, TS>>);
@@ -368,15 +367,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 		tx_pp: Arc<Sender<ParserTask>>,
 		concurrency_profile: config::ConcurrencyProfile,
 		networking_profile: config::ResolvedNetworkingProfile,
-		root_link_target: LinkTarget,
 	) -> MultiCrawlerTuple<JS, TS, P> {
 		let (job_tx, job_rx) = bounded_ch::<Job<JS, TS, P>>(concurrency_profile.job_tx_buffer_size());
 		let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
-		(
-			MultiCrawler { job_rx, update_tx, tx_pp, concurrency_profile, networking_profile, root_link_target },
-			job_tx,
-			update_rx,
-		)
+		(MultiCrawler { job_rx, update_tx, tx_pp, concurrency_profile, networking_profile }, job_tx, update_rx)
 	}
 
 	async fn process(self) -> Result<()> {
