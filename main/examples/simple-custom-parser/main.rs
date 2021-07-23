@@ -53,7 +53,7 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
     ) -> task_expanders::Result {
         let title = doc.title.clone();
         if let Some(title) = title {
-            ctx.job_state.lock().unwrap().sum_title_len += title.len();
+            ctx.job_state.invoke(|js| js.sum_title_len += title.len());
             ctx.task_state.title = title;
         }
         Ok(())
@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
     for r in crawler.iter(job) {
         println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
-            println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
+            r.ctx.job_state.weak(|js| println!("final job state: {:?}", js));
         }
     }
 

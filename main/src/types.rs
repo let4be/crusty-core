@@ -4,16 +4,19 @@ use thiserror::{self, Error};
 use crate::{_prelude::*, config, load_filters, status_filters, task_expanders, task_filters};
 
 pub trait ParsedDocument: 'static {}
-pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::Filter<JS, TS> + Send + Sync>>;
-pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::Filter<JS, TS> + Send + Sync>>;
-pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::Filter<JS, TS> + Send + Sync>>;
-pub type TaskExpanders<JS, TS, P> = Vec<Box<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>>;
 pub type DocumentParser<P> = Box<dyn Fn(Box<dyn io::Read + Sync + Send>) -> Result<P> + Send + Sync + 'static>;
-
 pub type BoxedFn<T> = Box<dyn Fn() -> Box<T> + Send + Sync>;
+
+pub type TaskFilters<JS, TS> = Vec<Box<dyn task_filters::Filter<JS, TS> + Send + Sync>>;
 pub type BoxedTaskFilter<JS, TS> = BoxedFn<dyn task_filters::Filter<JS, TS> + Send + Sync>;
+
+pub type StatusFilters<JS, TS> = Vec<Box<dyn status_filters::Filter<JS, TS> + Send + Sync>>;
 pub type BoxedStatusFilter<JS, TS> = BoxedFn<dyn status_filters::Filter<JS, TS> + Send + Sync>;
+
+pub type LoadFilters<JS, TS> = Vec<Box<dyn load_filters::Filter<JS, TS> + Send + Sync>>;
 pub type BoxedLoadFilter<JS, TS> = BoxedFn<dyn load_filters::Filter<JS, TS> + Send + Sync>;
+
+pub type TaskExpanders<JS, TS, P> = Vec<Box<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>>;
 pub type BoxedTaskExpander<JS, TS, P> = BoxedFn<dyn task_expanders::Expander<JS, TS, P> + Send + Sync>;
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
@@ -166,8 +169,6 @@ impl fmt::Display for LinkTarget {
 		write!(f, "{:?}", self)
 	}
 }
-
-pub type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + Send + 'a>;
 
 #[derive(Clone)]
 pub struct Link {
@@ -349,7 +350,28 @@ pub trait TaskStateValues: Send + Sync + Clone + Default + 'static {}
 
 impl<T: Send + Sync + Clone + Default + 'static> TaskStateValues for T {}
 
-pub type JobSharedState = Arc<Mutex<HashMap<String, Box<dyn std::any::Any + Send + Sync>>>>;
+pub type JobStateWeak = HashMap<String, Box<dyn std::any::Any + Send + Sync>>;
+
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""))]
+pub struct JobState<JS> {
+	weak:   Arc<Mutex<JobStateWeak>>,
+	strong: Arc<Mutex<JS>>,
+}
+
+impl<JS: JobStateValues> JobState<JS> {
+	fn new(job_state: JS) -> Self {
+		Self { weak: Arc::new(Mutex::new(JobStateWeak::new())), strong: Arc::new(Mutex::new(job_state)) }
+	}
+
+	pub fn invoke<R, F: FnOnce(&mut JS) -> R>(&self, f: F) -> R {
+		f(&mut *self.strong.lock().unwrap())
+	}
+
+	pub fn weak<'a, R, F: FnOnce(&mut JobStateWeak) -> R + 'a>(&self, f: F) -> R {
+		f(&mut *self.weak.lock().unwrap())
+	}
+}
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = "TS: Clone"))]
@@ -357,8 +379,7 @@ pub struct JobCtx<JS, TS> {
 	pub settings:   Arc<config::CrawlingSettings>,
 	pub started_at: Instant,
 	pub root_url:   Url,
-	pub shared:     JobSharedState,
-	pub job_state:  Arc<Mutex<JS>>,
+	pub job_state:  JobState<JS>,
 	pub task_state: TS,
 	pub user_arg:   Option<u64>,
 	links:          Vec<Arc<Link>>,
@@ -387,8 +408,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 			started_at: Instant::now(),
 			root_url,
 			settings,
-			shared: Arc::new(Mutex::new(HashMap::new())),
-			job_state: Arc::new(Mutex::new(job_state)),
+			job_state: JobState::new(job_state),
 			task_state,
 			links: vec![],
 			user_arg,

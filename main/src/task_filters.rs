@@ -240,8 +240,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				let mut link = (*link).clone();
 				// treat this link "as a redirect" from robots.txt, this way it retains root task status
 				link.redirect = 1;
-
-				ctx.shared.lock().unwrap().insert(String::from("robots::root_link"), Box::new(Some(link)));
+				ctx.job_state.weak(|js| js.insert(String::from("robots::root_link"), Box::new(Some(link))));
 
 				self.state = RobotsTxtState::Requested;
 				Ok(Action::Accept)
@@ -261,11 +260,15 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				// as load_filter would not emit root_link
 				self.state = RobotsTxtState::FilteringEnabled;
 
-				if let Some(robots) = ctx.shared.lock().unwrap().get_mut("robots::matcher") {
-					if let Some(ref mut matcher) = robots.downcast_mut::<Option<robotstxt::DefaultCachingMatcher>>() {
-						self.matcher = matcher.take();
+				ctx.job_state.weak(|js| {
+					if let Some(robots) = js.get_mut("robots::matcher") {
+						if let Some(ref mut matcher) = robots.downcast_mut::<Option<robotstxt::DefaultCachingMatcher>>()
+						{
+							self.matcher = matcher.take();
+						}
 					}
-				}
+				});
+
 				self.accept(ctx, n, task)
 			}
 			RobotsTxtState::FilteringEnabled => {

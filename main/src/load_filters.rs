@@ -68,16 +68,9 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 		}
 
 		let mut matcher = robotstxt::DefaultCachingMatcher::new(robotstxt::DefaultMatcher::default());
-		let root_link = ctx
-			.shared
-			.lock()
-			.unwrap()
-			.get_mut("robots::root_link")
-			.unwrap()
-			.downcast_mut::<Option<rt::Link>>()
-			.unwrap()
-			.clone()
-			.unwrap();
+		let root_link = ctx.job_state.weak(|js| {
+			js.get_mut("robots::root_link").unwrap().downcast_mut::<Option<rt::Link>>().unwrap().clone().unwrap()
+		});
 
 		if (400_u16..500).contains(&status.code) {
 			matcher.parse(ROBOTS_TXT_ALLOW_EVERYTHING);
@@ -98,7 +91,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 			matcher.parse(&content);
 		}
 
-		ctx.shared.lock().unwrap().insert(String::from("robots::matcher"), Box::new(Some(matcher)));
+		ctx.job_state.weak(|js| js.insert(String::from("robots::matcher"), Box::new(Some(matcher))));
 		ctx.push_links(vec![root_link].into_iter());
 
 		Ok(())

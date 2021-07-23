@@ -65,14 +65,13 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
             .ok_or_else(|| anyhow!("title not found"))?;
         ctx.task_state.title = title.clone();
 
-        {
-            let mut job_state = ctx.job_state.lock().unwrap();
-            let urls_with_title = match job_state.duplicate_titles.entry(title) {
+        ctx.job_state.invoke(|js| {
+            let urls_with_title = match js.duplicate_titles.entry(title) {
                 Entry::Occupied(e) => e.into_mut(),
                 Entry::Vacant(e) => e.insert(vec![]),
             };
             urls_with_title.push(task.link.url.clone());
-        }
+        });
         Ok(())
     }
 }
@@ -81,9 +80,10 @@ async fn process_responses(rx: ChReceiver<JobUpdate<JobState, TaskState>>) {
     while let Ok(r) = rx.recv_async().await {
         info!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
-            let mut ctx = r.ctx.job_state.lock().unwrap();
-            ctx.finalize();
-            info!("final job state: {}", ctx);
+            r.ctx.job_state.invoke(|js| {
+                js.finalize();
+                info!("final job state: {}", js);
+            });
         }
     }
 }
