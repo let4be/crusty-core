@@ -210,15 +210,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 	) -> Result<FollowData> {
 		let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
 
-		let task_state = Arc::new(Mutex::new(Some(TS::default())));
-		let links = Arc::new(Mutex::new(Some(Vec::<Arc<Link>>::new())));
-
+		let mut ctx_out = tokio::sync::OnceCell::new();
 		let payload = {
 			let task = Arc::clone(&task);
 			let task_expanders = Arc::clone(&self.task_expanders);
 			let mut job_ctx = self.job.ctx.clone();
-			let task_state = Arc::clone(&task_state);
-			let links = Arc::clone(&links);
+			let job_ctx_out = ctx_out.clone();
 			let document_parser = Arc::clone(&self.document_parser);
 
 			move || -> Result<FollowData> {
@@ -234,15 +231,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 					|ctx, filter| filter.expand(ctx, &task, &status, &document),
 				);
 
-				{
-					let mut links = links.lock().unwrap();
-					*links = Some(job_ctx.consume_links());
-				}
-
-				{
-					let mut task_state = task_state.lock().unwrap();
-					*task_state = Some(job_ctx.task_state);
-				}
+				let _ = job_ctx_out.set((job_ctx.consume_links(), job_ctx.task_state));
 
 				let follow_data = FollowData { metrics: FollowMetrics { duration: t.elapsed() }, filter_err };
 				Ok(follow_data)
@@ -256,14 +245,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 		let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
 		let follow_data = parser_response.payload?;
-		{
-			let mut task_state = task_state.lock().unwrap();
-			self.job.ctx.task_state = task_state.take().unwrap();
+		if let Some((links, task_state)) = ctx_out.take() {
+			self.job.ctx.push_shared_links(links.into_iter());
+			self.job.ctx.task_state = task_state;
 		}
-		{
-			let mut links = links.lock().unwrap();
-			self.job.ctx.push_shared_links(links.take().unwrap().into_iter());
-		}
+
 		Ok(follow_data)
 	}
 
