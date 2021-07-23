@@ -32,7 +32,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS, Document>
 		ctx: &mut rt::JobCtx<JS, TS>,
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
-		document: &Document,
+		document: &mut Document,
 	) -> Result {
 		let links: Vec<rt::Link> = document
 			.find(select::predicate::Name("a"))
@@ -74,7 +74,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Expander<JS, TS, Document>
 		ctx: &mut rt::JobCtx<JS, TS>,
 		task: &rt::Task,
 		_status: &rt::HttpStatus,
-		document: &Document,
+		document: &mut Document,
 	) -> Result {
 		let links: Vec<rt::Link> = document
 			.find(select::predicate::Name("img"))

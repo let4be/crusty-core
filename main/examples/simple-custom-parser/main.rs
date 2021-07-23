@@ -49,7 +49,7 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
         ctx: &mut Ctx,
         _: &Task,
         _: &HttpStatus,
-        doc: &Document,
+        doc: &mut Document,
     ) -> task_expanders::Result {
         let title = doc.title.clone();
         if let Some(title) = title {
@@ -67,7 +67,7 @@ impl TaskExpander<JobState, TaskState, Document> for LinkExtractor {
         ctx: &mut Ctx,
         task: &Task,
         _: &HttpStatus,
-        doc: &Document,
+        doc: &mut Document,
     ) -> task_expanders::Result {
         let mut links = vec![];
         for link in &doc.links {

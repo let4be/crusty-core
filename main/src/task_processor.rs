@@ -74,12 +74,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(bytes.freeze())
 	}
 
-	fn filter<T, Name: Fn(&T) -> &'static str, Filter: Fn(&mut JobCtx<JS, TS>, &T) -> ExtResult<()>>(
+	fn filter<T, Name: Fn(&T) -> &'static str, Filter: FnMut(&mut JobCtx<JS, TS>, &T) -> ExtResult<()>>(
 		ctx: &mut JobCtx<JS, TS>,
 		kind: FilterKind,
 		filters: &Arc<Vec<T>>,
 		name_fn: Name,
-		filter_fn: Filter,
+		mut filter_fn: Filter,
 	) -> Option<ExtStatusError> {
 		for filter in filters.iter() {
 			let r = panic::catch_unwind(panic::AssertUnwindSafe(|| filter_fn(ctx, filter)));
@@ -210,28 +210,28 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 	) -> Result<FollowData> {
 		let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
 
-		let mut ctx_out = tokio::sync::OnceCell::new();
+		let ctx_out: Arc<Mutex<Option<JobCtxUpdate<TS>>>> = Arc::new(Mutex::new(None));
 		let payload = {
 			let task = Arc::clone(&task);
 			let task_expanders = Arc::clone(&self.task_expanders);
 			let mut job_ctx = self.job.ctx.clone();
-			let job_ctx_out = ctx_out.clone();
 			let document_parser = Arc::clone(&self.document_parser);
+			let ctx_out = Arc::clone(&ctx_out);
 
 			move || -> Result<FollowData> {
 				let t = Instant::now();
 
-				let document = document_parser(reader)?;
+				let mut document = document_parser(reader)?;
 
 				let filter_err = Self::filter(
 					&mut job_ctx,
 					FilterKind::FollowFilter,
 					&task_expanders,
 					|filter| filter.name(),
-					|ctx, filter| filter.expand(ctx, &task, &status, &document),
+					|ctx, filter| filter.expand(ctx, &task, &status, &mut document),
 				);
 
-				let _ = job_ctx_out.set((job_ctx.consume_links(), job_ctx.task_state));
+				*ctx_out.lock().unwrap() = Some(JobCtxUpdate::from(job_ctx));
 
 				let follow_data = FollowData { metrics: FollowMetrics { duration: t.elapsed() }, filter_err };
 				Ok(follow_data)
@@ -244,13 +244,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			.await;
 
 		let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
-		let follow_data = parser_response.payload?;
-		if let Some((links, task_state)) = ctx_out.take() {
+		if let Some(JobCtxUpdate { links, task_state }) = (*ctx_out.lock().unwrap()).take() {
 			self.job.ctx.push_shared_links(links.into_iter());
 			self.job.ctx.task_state = task_state;
 		}
 
-		Ok(follow_data)
+		Ok(parser_response.payload?)
 	}
 
 	async fn process_task(

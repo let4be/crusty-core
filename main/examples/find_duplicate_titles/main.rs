@@ -56,7 +56,7 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
         ctx: &mut JobCtx<JobState, TaskState>,
         task: &Task,
         _: &HttpStatus,
-        doc: &Document,
+        doc: &mut Document,
     ) -> task_expanders::Result {
         let title = doc
             .find(Name("title"))
@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
     let (update_tx, update_rx) = ch_unbounded();
     let h_sub = tokio::spawn(process_responses(update_rx));
 
-    let job = Job::new(&job_url, settings, rules, JobState::default())?;
+    let job = Job::new(&job_url, settings, rules, JobState::default(), LinkTarget::HeadFollow)?;
     crawler.go(job, update_tx).await?;
     drop(crawler);
 

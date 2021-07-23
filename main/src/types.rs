@@ -364,6 +364,17 @@ pub struct JobCtx<JS, TS> {
 	links:          Vec<Arc<Link>>,
 }
 
+pub(crate) struct JobCtxUpdate<TS> {
+	pub links:      Vec<Arc<Link>>,
+	pub task_state: TS,
+}
+
+impl<JS: JobStateValues, TS: TaskStateValues> From<JobCtx<JS, TS>> for JobCtxUpdate<TS> {
+	fn from(mut ctx: JobCtx<JS, TS>) -> Self {
+		Self { links: ctx.consume_links(), task_state: ctx.task_state }
+	}
+}
+
 impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 	pub fn new(
 		root_url: Url,
@@ -417,13 +428,15 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 impl Link {
 	pub fn new(
 		href: &str,
-		rel: &str,
-		alt: &str,
-		text: &str,
+		rel: impl ToString,
+		alt: impl ToString,
+		text: impl ToString,
 		redirect: usize,
 		target: LinkTarget,
 		parent: &Link,
 	) -> Result<Self> {
+		let href = href.trim();
+
 		let mut url = Url::parse(href)
 			.or_else(|_err| {
 				parent.url.join(href).with_context(|| format!("cannot join relative href {} to {}", href, &parent.url))
@@ -433,9 +446,9 @@ impl Link {
 
 		Ok(Self {
 			url,
-			rel: String::from(rel),
-			alt: alt.trim().to_string(),
-			text: text.trim().to_string(),
+			rel: rel.to_string(),
+			alt: alt.to_string(),
+			text: text.to_string(),
 			redirect,
 			target,
 			marker: 0,
