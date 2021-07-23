@@ -455,16 +455,15 @@ impl Link {
 		})
 	}
 
-	pub(crate) fn new_abs(href: Url, rel: &str, alt: &str, text: &str, redirect: usize, target: LinkTarget) -> Self {
-		Self {
-			url: href,
-			rel: String::from(rel),
-			alt: alt.trim().to_string(),
-			text: text.trim().to_string(),
-			redirect,
-			target,
-			marker: 0,
-		}
+	pub(crate) fn new_abs(
+		url: Url,
+		rel: impl ToString,
+		alt: impl ToString,
+		text: impl ToString,
+		redirect: usize,
+		target: LinkTarget,
+	) -> Self {
+		Self { url, rel: rel.to_string(), alt: alt.to_string(), text: text.to_string(), redirect, target, marker: 0 }
 	}
 }
 
