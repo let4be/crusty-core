@@ -252,7 +252,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(parser_response.payload?)
 	}
 
-	async fn process_task(
+	async fn _process_task(
 		&mut self,
 		task: Arc<Task>,
 		client: &HttpClient,
@@ -334,7 +334,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(status)
 	}
 
-	pub(crate) async fn invoke_task(
+	pub(crate) async fn process_task(
 		&mut self,
 		task: Arc<Task>,
 		client: &HttpClient,
@@ -342,7 +342,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 	) -> JobUpdate<JS, TS> {
 		stats.reset();
 
-		let mut status_r = self.process_task(Arc::clone(&task), client, stats).await;
+		let mut status_r = self._process_task(Arc::clone(&task), client, stats).await;
 		if let Ok(ref mut status_data) = status_r {
 			status_data.links.extend(self.job.ctx.consume_links());
 		}
@@ -375,7 +375,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 			while let Some(task) = binding.next_task().await {
 				tokio::select! {
-					r = self.invoke_task(task, &client, &mut stats) => {
+					r = self.process_task(task, &client, &mut stats) => {
 						binding.update(r);
 					},
 					_ = &mut timeout => break

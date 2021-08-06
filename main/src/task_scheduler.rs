@@ -259,6 +259,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Backend<JS, TS>
 		let processor = &mut self.processor;
 		let client = &self.client;
 		let mut stats = &mut self.stats;
-		Box::pin(async move { processor.invoke_task(task, client, &mut stats).await })
+		Box::pin(async move { processor.process_task(task, client, &mut stats).await })
 	}
 }
