@@ -6,7 +6,7 @@ use crusty_core::{
     types::{
         DocumentParser, HttpStatus, Job, JobCtx, JobStatus, Link, LinkTarget, ParsedDocument, Task,
     },
-    Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
+    Crawler, CrawlingRules, CrawlingRulesOptions, ParserActor, TaskExpander,
 };
 use html5ever::{
     local_name,
@@ -144,7 +144,7 @@ fn document_parser() -> DocumentParser<Document> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let concurrency_profile = config::ConcurrencyProfile::default();
-    let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+    let tx_pp = ParserActor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, tx_pp);

@@ -330,12 +330,14 @@ pub struct JobUpdate<JS: JobStateValues, TS: TaskStateValues> {
 	pub ctx:    JobCtx<JS, TS>,
 }
 
+#[derive(Message)]
+#[rtype(result = "ParserResponse")]
 pub struct ParserTask {
 	pub payload: Box<dyn FnOnce() -> Result<FollowData> + Send + 'static>,
 	pub time:    Instant,
-	pub res_tx:  Sender<ParserResponse>,
 }
 
+#[derive(MessageResponse)]
 pub struct ParserResponse {
 	pub payload:       Result<FollowData>,
 	pub wait_duration: Duration,

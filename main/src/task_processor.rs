@@ -11,6 +11,7 @@ use crate::{
 	resolver::{Adaptor as ResolverAdaptor, Resolver},
 	task_scheduler,
 	types::*,
+	ParserActor,
 };
 
 pub(crate) type HttpClient = hyper::Client<HttpConnector>;
@@ -28,7 +29,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	task_expanders:  Arc<TaskExpanders<JS, TS, P>>,
 	document_parser: Arc<DocumentParser<P>>,
 
-	parse_tx:       Sender<ParserTask>,
+	parse_tx:       Addr<ParserActor>,
 	client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
 	resolver:       Arc<Box<dyn Resolver>>,
 }
@@ -36,7 +37,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: Pars
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<JS, TS, P> {
 	pub(crate) fn new(
 		job: ResolvedJob<JS, TS, P>,
-		parse_tx: Sender<ParserTask>,
+		parse_tx: Addr<ParserActor>,
 		client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
 		resolver: Arc<Box<dyn Resolver>>,
 	) -> TaskProcessor<JS, TS, P> {
@@ -208,8 +209,6 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		status: HttpStatus,
 		reader: Box<dyn io::Read + Sync + Send>,
 	) -> Result<FollowData> {
-		let (parse_res_tx, parse_res_rx) = bounded_ch::<ParserResponse>(1);
-
 		let ctx_out: Arc<Mutex<Option<JobCtxUpdate<TS>>>> = Arc::new(Mutex::new(None));
 		let payload = {
 			let task = Arc::clone(&task);
@@ -238,12 +237,12 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 			}
 		};
 
-		let _ = self
+		let parser_response = self
 			.parse_tx
-			.send_async(ParserTask { payload: Box::new(payload), time: Instant::now(), res_tx: parse_res_tx })
-			.await;
+			.send(ParserTask { payload: Box::new(payload), time: Instant::now() })
+			.await
+			.context("cannot follow html document")?;
 
-		let parser_response = parse_res_rx.recv_async().await.context("cannot follow html document")?;
 		if let Some(JobCtxUpdate { links, task_state }) = (*ctx_out.lock().unwrap()).take() {
 			self.job.ctx.push_shared_links(links.into_iter());
 			self.job.ctx.task_state = task_state;

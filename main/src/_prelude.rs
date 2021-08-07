@@ -13,6 +13,8 @@ pub use std::{
 	sync::{Arc, Mutex},
 };
 
+pub use actix::{Actor, Addr, Context, SyncContext, System};
+pub use actix_derive::{Message, MessageResponse};
 pub use anyhow::{anyhow, Context as _};
 pub use derivative::Derivative;
 pub use flume::{bounded as bounded_ch, unbounded as unbounded_ch, Receiver, RecvError, Sender};

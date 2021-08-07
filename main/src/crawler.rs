@@ -3,7 +3,7 @@ use crate::{
 	config,
 	config::ResolvedNetworkingProfile,
 	hyper_utils, load_filters,
-	parser_processor::ParserProcessor,
+	parser_processor::ParserActor,
 	resolver::{Adaptor, AsyncStaticResolver},
 	status_filters, task_expanders, task_filters,
 	task_processor::*,
@@ -246,7 +246,7 @@ impl ClientFactory for HttpClientFactory {
 
 pub struct Crawler {
 	networking_profile: config::ResolvedNetworkingProfile,
-	tx_pp:              Arc<Sender<ParserTask>>,
+	tx_pp:              Addr<ParserActor>,
 }
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues> {
@@ -271,7 +271,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> CrawlerIter<JS, TS> {
 impl Crawler {
 	pub fn new_default() -> anyhow::Result<Crawler> {
 		let concurrency_profile = config::ConcurrencyProfile::default();
-		let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+		let tx_pp = ParserActor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
 		let networking_profile = config::NetworkingProfile::default().resolve()?;
 		Ok(Crawler::new(networking_profile, tx_pp))
@@ -279,7 +279,7 @@ impl Crawler {
 }
 
 impl Crawler {
-	pub fn new(networking_profile: config::ResolvedNetworkingProfile, tx_pp: Arc<Sender<ParserTask>>) -> Crawler {
+	pub fn new(networking_profile: config::ResolvedNetworkingProfile, tx_pp: Addr<ParserActor>) -> Crawler {
 		Crawler { networking_profile, tx_pp }
 	}
 
@@ -311,7 +311,7 @@ impl Crawler {
 				.map(|_| {
 					TaskProcessor::new(
 						job.clone(),
-						(*self.tx_pp).clone(),
+						self.tx_pp.clone(),
 						Box::new(client_factory.clone()),
 						Arc::clone(&self.networking_profile.resolver),
 					)
@@ -356,7 +356,7 @@ impl Crawler {
 pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	job_rx:              Receiver<Job<JS, TS, P>>,
 	update_tx:           Sender<JobUpdate<JS, TS>>,
-	tx_pp:               Arc<Sender<ParserTask>>,
+	tx_pp:               Addr<ParserActor>,
 	concurrency_profile: config::ConcurrencyProfile,
 	networking_profile:  config::ResolvedNetworkingProfile,
 }
@@ -364,7 +364,7 @@ pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocume
 pub type MultiCrawlerTuple<JS, TS, P> = (MultiCrawler<JS, TS, P>, Sender<Job<JS, TS, P>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS, TS, P> {
 	pub fn new(
-		tx_pp: Arc<Sender<ParserTask>>,
+		tx_pp: Addr<ParserActor>,
 		concurrency_profile: config::ConcurrencyProfile,
 		networking_profile: config::ResolvedNetworkingProfile,
 	) -> MultiCrawlerTuple<JS, TS, P> {
@@ -377,7 +377,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 		while let Ok(job) = self.job_rx.recv_async().await {
 			let np = self.networking_profile.clone();
 
-			let tx_pp = Arc::clone(&self.tx_pp);
+			let tx_pp = self.tx_pp.clone();
 			if job.addrs.is_some() {
 				let np_static = ResolvedNetworkingProfile {
 					values:   np.values,

@@ -95,7 +95,7 @@ fn configure_tracing() -> Result<()> {
     Ok(())
 }
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() -> Result<()> {
     configure_tracing()?;
 
@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
         parser_concurrency: 2,
         ..config::ConcurrencyProfile::default()
     };
-    let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+    let tx_pp = ParserActor::spawn(concurrency_profile, 1024 * 1024 * 32);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, tx_pp);
