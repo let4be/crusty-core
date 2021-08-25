@@ -32,8 +32,8 @@ tracing-tools = "~0.5.0"
 flume = "~0.10.5"
 futures-lite = "~1.12.0"
 serde = {version = "~1.0.125", features = ["derive"] }
-tokio = { version = "~1.8.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
-hyper = {version = "~0.14.7", features = ["http1", "http2", "client"] }
+tokio = { version = "~1.10.1", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
+hyper = {version = "~0.14.12", features = ["http1", "http2", "client"] }
 robotstxt-with-cache  = {version = "~0.4.0"}
 
 trust-dns-resolver = {version = "~0.20.2", features = ["system-config", "tokio-runtime", "serde-config"]}
