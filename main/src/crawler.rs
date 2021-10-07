@@ -195,7 +195,7 @@ struct HttpClientFactory {
 
 impl HttpClientFactory {
 	fn new(networking_profile: config::ResolvedNetworkingProfile) -> Self {
-		let v = &networking_profile.values;
+		let v = &networking_profile.profile;
 
 		let static_bind_local_ipv4 = if v.static_binding_within_the_task { v.rand_bind_local_ipv4() } else { None };
 		let static_bind_local_ipv6 = if v.static_binding_within_the_task { v.rand_bind_local_ipv6() } else { None };
@@ -207,20 +207,20 @@ impl HttpClientFactory {
 		if let Some(v) = self.static_bind_local_ipv4 {
 			return Some(v)
 		}
-		self.networking_profile.values.rand_bind_local_ipv4()
+		self.networking_profile.profile.rand_bind_local_ipv4()
 	}
 
 	fn bind_local_ipv6(&self) -> Option<Ipv6Addr> {
 		if let Some(v) = self.static_bind_local_ipv6 {
 			return Some(v)
 		}
-		self.networking_profile.values.rand_bind_local_ipv6()
+		self.networking_profile.profile.rand_bind_local_ipv6()
 	}
 }
 
 impl ClientFactory for HttpClientFactory {
 	fn make(&self) -> (HttpClient, hyper_utils::Stats) {
-		let v = self.networking_profile.values.clone();
+		let v = self.networking_profile.profile.clone();
 
 		let resolver_adaptor = Adaptor::new(Arc::clone(&self.networking_profile.resolver));
 		let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
@@ -367,7 +367,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 			let tx_pp = Arc::clone(&self.tx_pp);
 			if job.addrs.is_some() {
 				let np_static = ResolvedNetworkingProfile {
-					values:   np.values,
+					profile:  np.profile,
 					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone()))),
 				};
 

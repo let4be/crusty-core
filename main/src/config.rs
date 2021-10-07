@@ -313,20 +313,16 @@ pub struct ResolverConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkingProfile {
-	pub values:           NetworkingProfileValues,
-	pub resolver_config:  ResolverConfig,
+	pub profile:          NetworkingProfileValues,
+	pub resolver:         ResolverConfig,
 	pub net_v4_blacklist: Vec<CIpv4Net>,
-
-	#[serde(skip)]
-	resolver: Option<Arc<Box<dyn Resolver>>>,
 }
 
 impl Default for NetworkingProfile {
 	fn default() -> Self {
 		Self {
-			values:           NetworkingProfileValues::default(),
-			resolver:         None,
-			resolver_config:  ResolverConfig::default(),
+			profile:          NetworkingProfileValues::default(),
+			resolver:         ResolverConfig::default(),
 			net_v4_blacklist: vec![],
 		}
 	}
@@ -336,31 +332,32 @@ impl NetworkingProfile {
 	pub fn resolve(self) -> Result<ResolvedNetworkingProfile> {
 		ResolvedNetworkingProfile::new(self)
 	}
+
+	pub fn resolve_custom_resolver(self, resolver: Box<dyn Resolver>) -> Result<ResolvedNetworkingProfile> {
+		Ok(ResolvedNetworkingProfile::new_with_resolver(self, resolver))
+	}
 }
 
 #[derive(Clone, Debug)]
 pub struct ResolvedNetworkingProfile {
-	pub values: NetworkingProfileValues,
+	pub profile: NetworkingProfileValues,
 
 	pub resolver: Arc<Box<dyn Resolver>>,
 }
 
 impl ResolvedNetworkingProfile {
+	fn new_with_resolver(p: NetworkingProfile, resolver: Box<dyn Resolver>) -> Self {
+		Self { profile: p.profile, resolver: Arc::new(resolver) }
+	}
+
 	fn new(p: NetworkingProfile) -> Result<Self> {
-		let values = p.values;
-
-		if let Some(r) = p.resolver {
-			return Ok(Self { values, resolver: r })
-		}
-
-		let (config, options) =
-			if let (Some(config), Some(options)) = (p.resolver_config.config, p.resolver_config.options) {
-				(config, options.into())
-			} else {
-				let (config, options) = trust_dns_resolver::system_conf::read_system_conf()
-					.context("cannot read resolver config settings from system")?;
-				(config, AsyncTrustDnsResolverOptsMapping(options))
-			};
+		let (config, options) = if let (Some(config), Some(options)) = (p.resolver.config, p.resolver.options) {
+			(config, options.into())
+		} else {
+			let (config, options) = trust_dns_resolver::system_conf::read_system_conf()
+				.context("cannot read resolver config settings from system")?;
+			(config, AsyncTrustDnsResolverOptsMapping(options))
+		};
 
 		let mut resolver = AsyncTrustDnsResolver::new(config, *options).context("cannot create default resolver")?;
 
@@ -371,7 +368,7 @@ impl ResolvedNetworkingProfile {
 			.collect::<Vec<_>>();
 		resolver.with_net_v4_blacklist(reserved_v4);
 		resolver.with_net_v6_blacklist(RESERVED_V6_SUBNETS.to_vec());
-		Ok(Self { values, resolver: Arc::new(Box::new(resolver)) })
+		Ok(Self { profile: p.profile, resolver: Arc::new(Box::new(resolver)) })
 	}
 }
 
