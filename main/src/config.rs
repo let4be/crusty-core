@@ -310,22 +310,12 @@ pub struct ResolverConfig {
 	options: Option<AsyncTrustDnsResolverOpts>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkingProfile {
 	pub profile:          NetworkingProfileValues,
 	pub resolver:         ResolverConfig,
 	pub net_v4_blacklist: Vec<CIpv4Net>,
-}
-
-impl Default for NetworkingProfile {
-	fn default() -> Self {
-		Self {
-			profile:          NetworkingProfileValues::default(),
-			resolver:         ResolverConfig::default(),
-			net_v4_blacklist: vec![],
-		}
-	}
 }
 
 impl NetworkingProfile {

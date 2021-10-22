@@ -307,7 +307,7 @@ pub struct FollowData {
 pub struct JobFinished {}
 
 pub enum JobStatus {
-	Processing(Result<JobProcessing>),
+	Processing(Result<Box<JobProcessing>>),
 	Finished(std::result::Result<JobFinished, JobError>),
 }
 

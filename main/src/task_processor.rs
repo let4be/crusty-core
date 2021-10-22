@@ -379,7 +379,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 						let _ = self.tx.send_async(JobUpdate {
 							task,
-							status: JobStatus::Processing(status_r),
+							status: JobStatus::Processing(status_r.map(Box::new)),
 							ctx: self.job.ctx.clone(),
 						}).await;
 					}
