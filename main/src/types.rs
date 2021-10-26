@@ -18,7 +18,7 @@ pub type BoxedTaskExpander<JS, TS, P> = BoxedFn<dyn task_expanders::Expander<JS,
 
 pub struct Job<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub url:       url::Url,
-	pub addrs:     Option<Vec<SocketAddr>>,
+	pub addrs:     Vec<SocketAddr>,
 	pub settings:  Arc<config::CrawlingSettings>,
 	pub rules:     Box<dyn JobRules<JS, TS, P>>,
 	pub user_arg:  Option<u64>,
@@ -43,11 +43,11 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 	) -> anyhow::Result<Job<JS, TS, P>> {
 		let url = Url::parse(url).context("cannot parse url")?;
 
-		Ok(Self { url, addrs: None, settings, rules: Box::new(rules), job_state, user_arg: None })
+		Ok(Self { url, addrs: vec![], settings, rules: Box::new(rules), job_state, user_arg: None })
 	}
 
 	pub fn with_addrs(mut self, addrs: Vec<SocketAddr>) -> Self {
-		self.addrs = Some(addrs);
+		self.addrs = addrs;
 		self
 	}
 
@@ -61,7 +61,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> Job<JS, TS, P> 
 #[derivative(Clone(bound = ""))]
 pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
 	pub url:      url::Url,
-	pub addrs:    Option<Vec<SocketAddr>>,
+	pub addrs:    Vec<SocketAddr>,
 	pub settings: Arc<config::CrawlingSettings>,
 	pub rules:    Arc<Box<dyn JobRules<JS, TS, P>>>,
 	pub ctx:      JobCtx<JS, TS>,

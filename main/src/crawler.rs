@@ -365,10 +365,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 			let np = self.networking_profile.clone();
 
 			let tx_pp = Arc::clone(&self.tx_pp);
-			if job.addrs.is_some() {
+			if !job.addrs.is_empty() {
 				let np_static = ResolvedNetworkingProfile {
 					profile:  np.profile,
-					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone().unwrap().clone()))),
+					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone()))),
 				};
 
 				let crawler = Crawler::new(np_static, tx_pp);
