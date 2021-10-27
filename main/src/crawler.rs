@@ -307,7 +307,16 @@ impl Crawler {
 
 			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone());
 
-			let client_factory = HttpClientFactory::new(self.networking_profile.clone());
+			let networking_profile = if !job.addrs.is_empty() {
+				ResolvedNetworkingProfile {
+					profile:  self.networking_profile.profile.clone(),
+					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone()))),
+				}
+			} else {
+				self.networking_profile.clone()
+			};
+
+			let client_factory = HttpClientFactory::new(networking_profile);
 
 			let mut processor_handles = vec![];
 			for i in 0..job.settings.concurrency {
@@ -362,21 +371,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 
 	async fn process(self) -> Result<()> {
 		while let Ok(job) = self.job_rx.recv_async().await {
-			let np = self.networking_profile.clone();
-
 			let tx_pp = Arc::clone(&self.tx_pp);
-			if !job.addrs.is_empty() {
-				let np_static = ResolvedNetworkingProfile {
-					profile:  np.profile,
-					resolver: Arc::new(Box::new(AsyncStaticResolver::new(job.addrs.clone()))),
-				};
-
-				let crawler = Crawler::new(np_static, tx_pp);
-				let _ = crawler.go(job, self.update_tx.clone()).await;
-			} else {
-				let crawler = Crawler::new(np, tx_pp);
-				let _ = crawler.go(job, self.update_tx.clone()).await;
-			}
+			let crawler = Crawler::new(self.networking_profile.clone(), tx_pp);
+			let _ = crawler.go(job, self.update_tx.clone()).await;
 		}
 		Ok(())
 	}
