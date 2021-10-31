@@ -27,12 +27,14 @@ name="simple-short"
 required-features = ["select_rs"]
 
 [dependencies]
+tokio = { version = "^1.12", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
+strum = { version = "0.22", features = ["derive"] }
+
 tracing-tools = "~0.5.0"
 
 flume = "~0.10.5"
 futures-lite = "~1.12.0"
 serde = {version = "~1.0.125", features = ["derive"] }
-tokio = { version = "~1.12.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
 hyper = {version = "~0.14.12", features = ["http1", "http2", "client"] }
 robotstxt-with-cache  = {version = "~0.4.0"}
 
@@ -57,7 +59,6 @@ rand = "~0.8.0"
 
 derivative = "~2.2.0"
 core_affinity = "~0.5.10"
-strum_macros = "~0.22.0"
 
 [dev-dependencies]
 html5ever = "~0.25.1"
