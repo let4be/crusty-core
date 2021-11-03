@@ -221,17 +221,30 @@ impl Default for AsyncTrustDnsResolverOpts {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ParserProfile {
+	pub concurrency: usize,
+	pub pin:         usize,
+	pub stack_size:  Option<CBytes>,
+}
+
+impl Default for ParserProfile {
+	fn default() -> Self {
+		let physical_cores = num_cpus::get_physical();
+		Self { concurrency: physical_cores, pin: 0, stack_size: Some(CBytes(128 * 1024 * 1024)) }
+	}
+}
+
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConcurrencyProfile {
-	pub parser_concurrency: usize,
-	pub parser_pin:         usize,
 	pub domain_concurrency: usize,
 }
 
 impl Default for ConcurrencyProfile {
 	fn default() -> Self {
 		let physical_cores = num_cpus::get_physical();
-		Self { parser_concurrency: physical_cores, parser_pin: 0, domain_concurrency: physical_cores * 40 }
+		Self { domain_concurrency: physical_cores * 40 }
 	}
 }
 

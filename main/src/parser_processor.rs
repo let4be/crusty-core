@@ -2,22 +2,18 @@ use crate::{_prelude::*, config, types::*};
 
 #[derive(Clone)]
 pub struct ParserProcessor {
-	concurrency:      usize,
-	pin:              usize,
-	stack_size_bytes: usize,
-	rx:               Receiver<ParserTask>,
+	profile: config::ParserProfile,
+	rx:      Receiver<ParserTask>,
 }
 
 impl ParserProcessor {
-	pub fn spawn(concurrency_profile: config::ConcurrencyProfile, stack_size_bytes: usize) -> Arc<Sender<ParserTask>> {
+	pub fn spawn(
+		concurrency_profile: config::ConcurrencyProfile,
+		parser_profile: config::ParserProfile,
+	) -> Arc<Sender<ParserTask>> {
 		let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size());
 
-		let s = Self {
-			concurrency: concurrency_profile.parser_concurrency,
-			pin: concurrency_profile.parser_pin,
-			stack_size_bytes,
-			rx,
-		};
+		let s = Self { profile: parser_profile, rx };
 		let _ = tokio::spawn(s.go());
 		Arc::new(tx)
 	}
@@ -46,18 +42,21 @@ impl ParserProcessor {
 		.instrument()
 	}
 
-	pub async fn go(mut self) -> Result<()> {
+	pub async fn go(self) -> Result<()> {
 		let mut core_ids = core_affinity::get_core_ids().unwrap().into_iter();
-		let handles: Vec<Result<std::thread::JoinHandle<()>>> = (0..self.concurrency)
+
+		let mut pin = self.profile.pin;
+		let handles: Vec<Result<std::thread::JoinHandle<()>>> = (0..self.profile.concurrency)
 			.into_iter()
 			.map(|n| {
 				let p = self.clone();
-				let thread_builder = std::thread::Builder::new()
-					.name(format!("parser processor {}", n))
-					.stack_size(self.stack_size_bytes);
+				let mut thread_builder = std::thread::Builder::new().name(format!("parser processor {}", n));
+				if let Some(stack_size) = &self.profile.stack_size {
+					thread_builder = thread_builder.stack_size(stack_size.0);
+				}
 
-				let id = if self.pin > 0 {
-					self.pin -= 1;
+				let id = if pin > 0 {
+					pin -= 1;
 					core_ids.next()
 				} else {
 					None

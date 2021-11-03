@@ -105,11 +105,9 @@ async fn main() -> Result<()> {
         return Err(anyhow!("please specify JOB_URL env. variable"))
     };
 
-    let concurrency_profile = config::ConcurrencyProfile {
-        parser_concurrency: 2,
-        ..config::ConcurrencyProfile::default()
-    };
-    let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+    let concurrency_profile = config::ConcurrencyProfile::default();
+    let parser_profile = config::ParserProfile::default();
+    let tx_pp = ParserProcessor::spawn(concurrency_profile, parser_profile);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, tx_pp);

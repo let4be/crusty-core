@@ -39,7 +39,8 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let concurrency_profile = config::ConcurrencyProfile::default();
-    let tx_pp = ParserProcessor::spawn(concurrency_profile, 1024 * 1024 * 32);
+    let parser_profile = config::ParserProfile::default();
+    let tx_pp = ParserProcessor::spawn(concurrency_profile, parser_profile);
 
     let networking_profile = config::NetworkingProfile::default().resolve()?;
     let crawler = Crawler::new(networking_profile, tx_pp);

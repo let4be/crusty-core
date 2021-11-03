@@ -139,11 +139,27 @@ pub enum ExtError {
 pub type ExtResult<T> = std::result::Result<T, ExtError>;
 
 #[derive(Error, Debug)]
+pub enum TaskError {
+	#[error("timeout while waiting for loading({limit:?})")]
+	Timeout { limit: Duration },
+	#[error("http response is too big(>{limit:?})")]
+	HttpTooBigResponse { limit: u32 },
+	#[error("http response is malformed")]
+	HttpMalformedResponse,
+	#[error("http redirect limit reached({limit:?})")]
+	HttpRedirectLimitReached { limit: u16 },
+	#[error("http response error, code {code:?}")]
+	HttpError { code: u16 },
+}
+
+#[derive(Error, Debug)]
 pub enum JobError {
 	#[error("job finished by soft timeout")]
 	JobFinishedBySoftTimeout,
 	#[error("job finished by hard timeout")]
 	JobFinishedByHardTimeout,
+	#[error("job finished by error in a root task")]
+	RootTaskError(TaskError),
 }
 
 #[derive(Clone, PartialEq, Debug, Copy, IntoStaticStr)]
