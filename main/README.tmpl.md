@@ -16,13 +16,13 @@ If you want to get more fancy and configure some stuff or control your imports m
 Simply add this to your `Cargo.toml`
 ```
 [dependencies]
-crusty-core = {version = "~0.81.0", features=["select_rs"]}
+crusty-core = {version = "~0.82.0", features=["select_rs"]}
 ```
 
 if you need just library without built-in `select.rs` task expanders(for links, images, etc)
 ```
 [dependencies]
-crusty-core = "~0.81.0"
+crusty-core = "~0.82.0"
 ```
 
 ### Key capabilities
