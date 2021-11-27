@@ -10,12 +10,12 @@ impl ParserProcessor {
 	pub fn spawn(
 		concurrency_profile: config::ConcurrencyProfile,
 		parser_profile: config::ParserProfile,
-	) -> Arc<Sender<ParserTask>> {
+	) -> Sender<ParserTask> {
 		let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size());
 
 		let s = Self { profile: parser_profile, rx };
 		let _ = tokio::spawn(s.go());
-		Arc::new(tx)
+		tx
 	}
 
 	fn process(&self, n: usize) -> TaskFut {

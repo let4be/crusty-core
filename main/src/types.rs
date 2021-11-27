@@ -63,7 +63,7 @@ pub struct ResolvedJob<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocumen
 	pub url:      url::Url,
 	pub addrs:    Vec<SocketAddr>,
 	pub settings: Arc<config::CrawlingSettings>,
-	pub rules:    Arc<Box<dyn JobRules<JS, TS, P>>>,
+	pub rules:    Rc<Box<dyn JobRules<JS, TS, P>>>,
 	pub ctx:      JobCtx<JS, TS>,
 }
 
@@ -73,7 +73,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> From<Job<JS, TS
 			url:      job.url.clone(),
 			addrs:    job.addrs,
 			settings: Arc::clone(&job.settings),
-			rules:    Arc::new(job.rules),
+			rules:    Rc::new(job.rules),
 			ctx:      JobCtx::new(job.url, job.settings, job.job_state, TS::default(), job.user_arg),
 		}
 	}
@@ -386,7 +386,7 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 		Self {
 			started_at: Instant::now(),
 			root_url,
-			settings,
+			settings: Arc::clone(&settings),
 			shared: Arc::new(Mutex::new(HashMap::new())),
 			job_state: Arc::new(Mutex::new(job_state)),
 			task_state,
@@ -395,7 +395,15 @@ impl<JS: JobStateValues, TS: TaskStateValues> JobCtx<JS, TS> {
 		}
 	}
 
-	pub fn timeout_remaining(&self, t: Duration) -> PinnedFut<()> {
+	pub fn timeout_remaining(&self, t: Duration, jitter: Option<Duration>) -> PinnedFut<()> {
+		let jitter = if let Some(jitter) = jitter {
+			let mut rng = thread_rng();
+			Duration::from_millis(rng.gen_range(0..jitter.as_millis()) as u64)
+		} else {
+			Duration::from_secs(0)
+		};
+		let t = t + jitter;
+
 		let elapsed = self.started_at.elapsed();
 
 		Box::pin(async move {

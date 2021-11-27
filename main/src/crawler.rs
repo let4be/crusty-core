@@ -246,7 +246,7 @@ impl ClientFactory for HttpClientFactory {
 
 pub struct Crawler {
 	networking_profile: config::ResolvedNetworkingProfile,
-	tx_pp:              Arc<Sender<ParserTask>>,
+	tx_pp:              Sender<ParserTask>,
 }
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues> {
@@ -275,13 +275,45 @@ impl Crawler {
 		let tx_pp = ParserProcessor::spawn(concurrency_profile, parser_profile);
 
 		let networking_profile = config::NetworkingProfile::default().resolve()?;
+
 		Ok(Crawler::new(networking_profile, tx_pp))
 	}
 }
 
+pub struct CrawlerCtx {
+	name: String,
+}
+
+impl CrawlerCtx {
+	pub fn new(name: &str) -> Self {
+		Self { name: String::from(name) }
+	}
+
+	pub fn run<F: Future>(
+		self,
+		ctx: impl FnOnce() -> F + Send + 'static,
+	) -> Result<std::thread::JoinHandle<Result<()>>> {
+		let thread_builder = std::thread::Builder::new().name(self.name);
+
+		Ok(thread_builder
+			.spawn(move || {
+				let local_set = tokio::task::LocalSet::new();
+				let runtime = tokio::runtime::Builder::new_current_thread()
+					.enable_all()
+					.build()
+					.context("cannot create single threaded tokio runtime")?;
+
+				local_set.block_on(&runtime, ctx());
+
+				Ok::<_, Error>(())
+			})
+			.context("cannot spawn crawler context thread")?)
+	}
+}
+
 impl Crawler {
-	pub fn new(networking_profile: config::ResolvedNetworkingProfile, tx_pp: Arc<Sender<ParserTask>>) -> Crawler {
-		Crawler { networking_profile, tx_pp }
+	pub fn new(networking_profile: config::ResolvedNetworkingProfile, tx_pp: Sender<ParserTask>) -> Self {
+		Self { networking_profile, tx_pp }
 	}
 
 	pub fn iter<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument>(
@@ -290,8 +322,8 @@ impl Crawler {
 	) -> CrawlerIter<JS, TS> {
 		let (tx, rx) = unbounded_ch();
 
-		let h = tokio::spawn(async move {
-			self.go(job, tx).await?;
+		let h = tokio::task::spawn_local(async move {
+			self.go(job, tx);
 			Ok::<_, Error>(())
 		});
 
@@ -299,11 +331,11 @@ impl Crawler {
 	}
 
 	pub fn go<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument>(
-		&self,
+		self,
 		job: Job<JS, TS, P>,
 		update_tx: Sender<JobUpdate<JS, TS>>,
-	) -> TaskFut {
-		TracingTask::new(span!(url=%job.url), async move {
+	) -> TaskFut2<'static> {
+		TracingTask2::new(span!(url=%job.url), async move {
 			let job = ResolvedJob::from(job);
 
 			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone());
@@ -325,12 +357,13 @@ impl Crawler {
 					job.clone(),
 					scheduler.job_update_tx.clone(),
 					scheduler.tasks_rx.clone(),
-					(*self.tx_pp).clone(),
+					self.tx_pp.clone(),
+					scheduler.reset_rx.clone(),
 					Box::new(client_factory.clone()),
 					Arc::clone(&self.networking_profile.resolver),
 				);
 
-				processor_handles.push(tokio::spawn(async move { processor.go(i).await }));
+				processor_handles.push(tokio::task::spawn_local(async move { processor.go(i).await }));
 			}
 
 			let job_finishing_update = scheduler.go()?.await?;
@@ -351,50 +384,63 @@ impl Crawler {
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""))]
 pub struct MultiCrawler<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> {
-	job_rx:              Receiver<Job<JS, TS, P>>,
-	update_tx:           Sender<JobUpdate<JS, TS>>,
-	tx_pp:               Arc<Sender<ParserTask>>,
 	concurrency_profile: config::ConcurrencyProfile,
 	networking_profile:  config::ResolvedNetworkingProfile,
+
+	job_rx:    Receiver<Job<JS, TS, P>>,
+	update_tx: Sender<JobUpdate<JS, TS>>,
+	tx_pp:     Sender<ParserTask>,
 }
 
 pub type MultiCrawlerTuple<JS, TS, P> = (MultiCrawler<JS, TS, P>, Sender<Job<JS, TS, P>>, Receiver<JobUpdate<JS, TS>>);
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS, TS, P> {
 	pub fn new(
-		tx_pp: Arc<Sender<ParserTask>>,
 		concurrency_profile: config::ConcurrencyProfile,
 		networking_profile: config::ResolvedNetworkingProfile,
+		tx_pp: Sender<ParserTask>,
 	) -> MultiCrawlerTuple<JS, TS, P> {
 		let (job_tx, job_rx) = bounded_ch::<Job<JS, TS, P>>(concurrency_profile.job_tx_buffer_size());
 		let (update_tx, update_rx) = bounded_ch::<JobUpdate<JS, TS>>(concurrency_profile.job_update_buffer_size());
-		(MultiCrawler { job_rx, update_tx, tx_pp, concurrency_profile, networking_profile }, job_tx, update_rx)
+		(MultiCrawler { concurrency_profile, networking_profile, job_rx, update_tx, tx_pp }, job_tx, update_rx)
 	}
 
-	async fn process(self) -> Result<()> {
+	async fn crawl(self) -> Result<()> {
 		while let Ok(job) = self.job_rx.recv_async().await {
-			let tx_pp = Arc::clone(&self.tx_pp);
+			let tx_pp = self.tx_pp.clone();
 			let crawler = Crawler::new(self.networking_profile.clone(), tx_pp);
 			let _ = crawler.go(job, self.update_tx.clone()).await;
 		}
 		Ok(())
 	}
 
+	async fn crawl_in_ctx(self) -> Result<()> {
+		let mut handles = vec![];
+		for _ in 0..self.concurrency_profile.domain_concurrency {
+			let mc = self.clone();
+			let h = tokio::task::spawn_local(async move { mc.crawl().await });
+			handles.push(h);
+		}
+
+		for h in handles {
+			let _ = h.await.context("cannot join")?;
+		}
+		Ok(())
+	}
+
 	pub fn go(self) -> TaskFut<'static> {
 		TracingTask::new(span!(), async move {
-			let mut handles = vec![];
-			for _ in 0..self.concurrency_profile.domain_concurrency {
-				let h = tokio::spawn({
-					let s = self.clone();
-					async move {
-						s.process().await?;
-						Ok::<_, Error>(())
-					}
-				});
-				handles.push(h);
-			}
+			let physical_cores = num_cpus::get_physical();
 
+			let handles: Vec<_> = (0..physical_cores)
+				.into_iter()
+				.map(|n| {
+					let mc = self.clone();
+					let ctx = CrawlerCtx::new(&format!("multi crawler {}", n));
+					ctx.run(|| async move { mc.crawl_in_ctx().await })
+				})
+				.collect();
 			for h in handles {
-				let _ = h.await?;
+				let _ = h?.join();
 			}
 			Ok(())
 		})

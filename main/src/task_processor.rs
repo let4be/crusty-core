@@ -28,6 +28,7 @@ pub(crate) struct TaskProcessor<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	document_parser: Arc<DocumentParser<P>>,
 
 	tx:             Sender<JobUpdate<JS, TS>>,
+	reset_rx:       Receiver<()>,
 	tasks_rx:       Receiver<Arc<Task>>,
 	parse_tx:       Sender<ParserTask>,
 	client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
@@ -40,16 +41,18 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		tx: Sender<JobUpdate<JS, TS>>,
 		tasks_rx: Receiver<Arc<Task>>,
 		parse_tx: Sender<ParserTask>,
+		reset_rx: Receiver<()>,
 		client_factory: Box<dyn ClientFactory + Send + Sync + 'static>,
 		resolver: Arc<Box<dyn Resolver>>,
-	) -> TaskProcessor<JS, TS, P> {
-		TaskProcessor {
+	) -> Self {
+		Self {
 			status_filters: Arc::new(job.rules.status_filters()),
 			load_filters: Arc::new(job.rules.load_filters()),
 			task_expanders: Arc::new(job.rules.task_expanders()),
 			document_parser: job.rules.document_parser(),
 			job,
 			tx,
+			reset_rx,
 			tasks_rx,
 			parse_tx,
 			client_factory,
@@ -63,7 +66,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		while let Some(buf) = body.data().await {
 			let buf = buf.context("error during reading")?;
 			if buf.has_remaining() {
-				if bytes.len() + buf.len() > *self.job.settings.max_response_size as usize {
+				if bytes.len() + buf.len() > *self.job.settings.max_response_size {
 					return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size))
 				}
 				bytes.put(buf);
@@ -71,7 +74,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		}
 
 		if encoding.contains("gzip") || encoding.contains("deflate") {
-			let mut buf: Vec<u8> = vec![];
+			let mut buf = vec![];
 			let _ = GzDecoder::new(bytes.reader()).read_to_end(&mut buf)?;
 			return Ok(Bytes::from(buf))
 		}
@@ -354,15 +357,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(status)
 	}
 
-	pub(crate) fn go<'a>(mut self, n: usize) -> TaskFut<'a> {
-		TracingTask::new(span!(n=n, url=%self.job.url), async move {
+	pub(crate) fn go<'a>(mut self, n: usize) -> TaskFut2<'a> {
+		TracingTask2::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
-
-			let jitter_ms = {
-				let mut rng = thread_rng();
-				Duration::from_millis(rng.gen_range(0..self.job.settings.job_hard_timeout_jitter.as_millis()) as u64)
-			};
-			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout + jitter_ms);
 
 			while let Ok(task) = self.tasks_rx.recv_async().await {
 				if self.tasks_rx.is_disconnected() {
@@ -370,21 +367,26 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 				}
 
 				stats.reset();
+				let reset_rx = self.reset_rx.clone();
 
-				tokio::select! {
+				let task_timeout = *self.job.settings.task_timeout.clone();
+				let job_update = tokio::select! {
 					mut status_r = self.process_task(Arc::clone(&task), &client, &stats) => {
 						if let Ok(ref mut status_data) = status_r {
 							status_data.links.extend(self.job.ctx.consume_links());
 						}
 
-						let _ = self.tx.send_async(JobUpdate {
+						JobUpdate {
 							task,
 							status: JobStatus::Processing(status_r.map(Box::new)),
 							ctx: self.job.ctx.clone(),
-						}).await;
+						}
 					}
-					_ = &mut timeout => break
-				}
+					_ = time::sleep(task_timeout) => break,
+					_ = reset_rx.recv_async() => break,
+				};
+
+				let _ = self.tx.send_async(job_update).await;
 
 				if self.job.settings.delay.as_millis() > 0 || self.job.settings.delay_jitter.as_millis() > 0 {
 					let jitter_ms = {
@@ -394,7 +396,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 
 					tokio::select! {
 						_ = time::sleep(*self.job.settings.delay + jitter_ms) => {}
-						_ = &mut timeout => break
+						_ = reset_rx.recv_async() => break,
 					}
 				}
 			}

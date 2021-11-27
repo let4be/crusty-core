@@ -12,23 +12,33 @@ pub(crate) struct TaskScheduler<JS: JobStateValues, TS: TaskStateValues, P: Pars
 	pub(crate) job_update_tx: Sender<JobUpdate<JS, TS>>,
 	job_update_rx:            Receiver<JobUpdate<JS, TS>>,
 	update_tx:                Sender<JobUpdate<JS, TS>>,
+	_reset_tx:                Sender<()>,
+	pub(crate) reset_rx:      Receiver<()>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<JS, TS, P> {
-	pub(crate) fn new(job: ResolvedJob<JS, TS, P>, update_tx: Sender<JobUpdate<JS, TS>>) -> TaskScheduler<JS, TS, P> {
+	pub(crate) fn new(job: ResolvedJob<JS, TS, P>, update_tx: Sender<JobUpdate<JS, TS>>) -> Self {
 		let (job_update_tx, job_update_rx) = unbounded_ch::<JobUpdate<JS, TS>>();
 		let (tasks_tx, tasks_rx) = unbounded_ch::<Arc<Task>>();
+		let (_reset_tx, reset_rx) = unbounded_ch();
 
-		TaskScheduler {
-			task_filters: job.rules.task_filters(),
+		let task_filters = job.rules.task_filters();
+
+		Self {
 			job,
+
+			task_filters,
+
 			task_seq_num: 0,
 			pages_pending: 0,
+
 			tasks_tx,
 			tasks_rx,
 			job_update_tx,
 			job_update_rx,
 			update_tx,
+			_reset_tx,
+			reset_rx,
 		}
 	}
 
@@ -115,10 +125,10 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 		let _ = self.update_tx.send_async(task_response).await;
 	}
 
-	pub(crate) fn go<'a>(mut self) -> Result<TaskFut<'a, JobUpdate<JS, TS>>> {
+	pub(crate) fn go<'a>(mut self) -> Result<TaskFut2<'a, JobUpdate<JS, TS>>> {
 		let mut root_task = Task::new_root(&self.job.url)?;
 
-		Ok(TracingTask::new(span!(url = %self.job.url), async move {
+		Ok(TracingTask2::new(span!(url = %self.job.url), async move {
 			trace!(
 				soft_timeout_ms = self.job.settings.job_soft_timeout.as_millis() as u32,
 				hard_timeout_ms = self.job.settings.job_hard_timeout.as_millis() as u32,
@@ -133,7 +143,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 
 			let mut is_soft_timeout = false;
 			let mut is_hard_timeout = false;
-			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_soft_timeout);
+			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_soft_timeout, None);
 
 			while self.pages_pending > 0 {
 				tokio::select! {
@@ -147,11 +157,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskScheduler<J
 							break
 						}
 						is_soft_timeout = true;
-						let jitter_ms = {
-							let mut rng = thread_rng();
-							Duration::from_millis(rng.gen_range(0..self.job.settings.job_hard_timeout_jitter.as_millis()) as u64)
-						};
-						timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout + jitter_ms);
+						timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout, Some(*self.job.settings.job_hard_timeout_jitter));
 					}
 				}
 			}

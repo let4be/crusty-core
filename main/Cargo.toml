@@ -30,7 +30,9 @@ required-features = ["select_rs"]
 tokio = { version = "^1.12", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros"] }
 strum = { version = "0.22", features = ["derive"] }
 
-tracing-tools = "~0.5.0"
+tracing-tools = { path = "../../tracing-tools" }
+tracing-tools-2 = { path = "../../tracing-tools-2" }
+
 
 flume = "~0.10.5"
 futures-lite = "~1.12.0"
