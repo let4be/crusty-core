@@ -357,8 +357,8 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		Ok(status)
 	}
 
-	pub(crate) fn go<'a>(mut self, n: usize) -> TaskFut2<'a> {
-		TracingTask2::new(span!(n=n, url=%self.job.url), async move {
+	pub(crate) fn go<'a>(mut self, n: usize) -> TaskFut<'a> {
+		TracingTask::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
 
 			while let Ok(task) = self.tasks_rx.recv_async().await {

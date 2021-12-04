@@ -30,19 +30,27 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let crawler = Crawler::new_default()?;
+    let (tx_iter, iter) = Crawler::iter();
 
-    let settings = config::CrawlingSettings::default();
-    let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
-        .with_task_expander(|| DataExtractor {})
-        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+    let ctx = CrawlerCtx::new("ctx");
+    let ctx = ctx.run(|| async move {
+        let crawler = Crawler::new_default()?;
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
-    for r in crawler.iter(job) {
+        let settings = config::CrawlingSettings::default();
+        let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
+            .with_task_expander(|| DataExtractor {})
+            .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+
+        let job = Job::new("https://example.com", settings, rules, JobState::default())?;
+        crawler.go(job, tx_iter).await
+    })?;
+
+    for r in iter {
         println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
             println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
         }
     }
-    Ok(())
+
+    Ok(ctx.join().unwrap())
 }

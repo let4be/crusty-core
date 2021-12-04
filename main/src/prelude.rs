@@ -9,5 +9,5 @@ pub use crate::{
 	resolver::AsyncTrustDnsResolver,
 	status_filters, task_expanders, task_filters,
 	types::{DocumentParser, HttpStatus, Job, JobCtx, JobStatus, JobUpdate, Link, LinkTarget, ParsedDocument, Task},
-	Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
+	Crawler, CrawlerCtx, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };

@@ -38,21 +38,29 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let crawler = Crawler::new_default()?;
+    let (tx_iter, iter) = Crawler::iter();
 
-    let settings = config::CrawlingSettings::default();
-    let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
-        .with_task_expander(|| DataExtractor {})
-        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+    let ctx = CrawlerCtx::new("ctx");
+    let ctx = ctx.run(|| async move {
+        let crawler = Crawler::new_default()?;
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
-    for r in crawler.iter(job) {
+        let settings = config::CrawlingSettings::default();
+        let rules = CrawlingRules::new(CrawlingRulesOptions::default(), document_parser())
+            .with_task_expander(|| DataExtractor {})
+            .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+
+        let job = Job::new("https://example.com", settings, rules, JobState::default())?;
+        crawler.go(job, tx_iter).await
+    })?;
+
+    for r in iter {
         println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
             println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
         }
     }
-    Ok(())
+
+    Ok(ctx.join().unwrap())
 }
 
 ```
@@ -66,7 +74,7 @@ use crusty_core::{
     select_task_expanders::{document_parser, Document, FollowLinks},
     task_expanders,
     types::{HttpStatus, Job, JobCtx, JobStatus, LinkTarget, Task},
-    Crawler, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
+    Crawler, CrawlerCtx, CrawlingRules, CrawlingRulesOptions, ParserProcessor, TaskExpander,
 };
 
 #[derive(Debug, Default)]
@@ -104,24 +112,31 @@ async fn main() -> anyhow::Result<()> {
     let parser_profile = config::ParserProfile::default();
     let tx_pp = ParserProcessor::spawn(concurrency_profile, parser_profile);
 
-    let networking_profile = config::NetworkingProfile::default().resolve()?;
-    let crawler = Crawler::new(networking_profile, tx_pp);
+    let (tx_iter, iter) = Crawler::iter();
 
-    let settings = config::CrawlingSettings::default();
-    let rules_opt = CrawlingRulesOptions::default();
-    let rules = CrawlingRules::new(rules_opt, document_parser())
-        .with_task_expander(|| DataExtractor {})
-        .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+    let ctx = CrawlerCtx::new("ctx");
+    let ctx = ctx.run(|| async move {
+        let networking_profile = config::NetworkingProfile::default().resolve()?;
+        let crawler = Crawler::new(networking_profile, tx_pp);
 
-    let job = Job::new("https://example.com", settings, rules, JobState::default())?;
-    for r in crawler.iter(job) {
+        let settings = config::CrawlingSettings::default();
+        let rules_opt = CrawlingRulesOptions::default();
+        let rules = CrawlingRules::new(rules_opt, document_parser())
+            .with_task_expander(|| DataExtractor {})
+            .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+
+        let job = Job::new("https://bash.im", settings, rules, JobState::default())?;
+        crawler.go(job, tx_iter).await
+    })?;
+
+    for r in iter {
         println!("- {}, task state: {:?}", r, r.ctx.task_state);
         if let JobStatus::Finished(_) = r.status {
             println!("final job state: {:?}", r.ctx.job_state.lock().unwrap());
         }
     }
 
-    Ok(())
+    Ok(ctx.join().unwrap())
 }
 
 ```

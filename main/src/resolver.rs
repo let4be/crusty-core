@@ -57,7 +57,7 @@ impl Resolver for AsyncTrustDnsResolver {
 
 		let name = name.to_string();
 		Box::pin(async move {
-			let r = resolver
+			let addrs = resolver
 				.resolver
 				.lookup_ip(name.as_str())
 				.await?
@@ -71,7 +71,7 @@ impl Resolver for AsyncTrustDnsResolver {
 
 			let mut err = None;
 			let mut out_addrs: Vec<SocketAddr> = vec![];
-			for addr in r.into_iter() {
+			for addr in addrs {
 				match addr {
 					SocketAddr::V4(addr) => {
 						for blacklisted_net in resolver.net_v4_blacklist.iter() {

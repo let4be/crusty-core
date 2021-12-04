@@ -1,7 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     env, fmt,
-    rc::Rc,
 };
 
 use anyhow::anyhow;
@@ -100,11 +99,8 @@ fn configure_tracing() -> Result<()> {
 async fn main() -> Result<()> {
     configure_tracing()?;
 
-    let job_url = if let Ok(job_url) = env::var("JOB_URL") {
-        job_url
-    } else {
-        return Err(anyhow!("please specify JOB_URL env. variable"))
-    };
+    let job_url =
+        env::var("JOB_URL").map_err(|_| anyhow!("please specify JOB_URL env. variable"))?;
 
     let concurrency_profile = config::ConcurrencyProfile::default();
     let parser_profile = config::ParserProfile::default();
@@ -114,24 +110,21 @@ async fn main() -> Result<()> {
     let h_sub = tokio::spawn(process_responses(update_rx));
 
     let ctx = CrawlerCtx::new("ctx");
-    let _ = ctx
-        .run(|| async move {
-            let tx_pp = Rc::new(tx_pp);
-            let rules_options =
-                CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
-            let rules = CrawlingRules::new(rules_options, document_parser())
-                .with_task_expander(|| DataExtractor {})
-                .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
+    let ctx = ctx.run(|| async move {
+        let networking_profile = config::NetworkingProfile::default().resolve()?;
+        let crawler = Crawler::new(networking_profile, tx_pp);
 
-            let networking_profile = config::NetworkingProfile::default().resolve()?;
-            let settings = config::CrawlingSettings::default();
+        let settings = config::CrawlingSettings::default();
+        let rules_options =
+            CrawlingRulesOptions { page_budget: Some(100), ..CrawlingRulesOptions::default() };
+        let rules = CrawlingRules::new(rules_options, document_parser())
+            .with_task_expander(|| DataExtractor {})
+            .with_task_expander(|| FollowLinks::new(LinkTarget::HeadFollow));
 
-            let crawler = Crawler::new(networking_profile, tx_pp);
-            let job = Job::new(&job_url, settings, rules, JobState::default())?;
-            crawler.go(job, update_tx).await
-        })?
-        .join();
+        let job = Job::new(&job_url, settings, rules, JobState::default())?;
+        crawler.go(job, update_tx).await
+    })?;
 
     h_sub.await?;
-    Ok(())
+    Ok(ctx.join().unwrap())
 }

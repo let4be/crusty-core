@@ -251,7 +251,6 @@ pub struct Crawler {
 
 pub struct CrawlerIter<JS: JobStateValues, TS: TaskStateValues> {
 	rx: Receiver<JobUpdate<JS, TS>>,
-	_h: tokio::task::JoinHandle<Result<()>>,
 }
 
 impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
@@ -259,12 +258,6 @@ impl<JS: JobStateValues, TS: TaskStateValues> Iterator for CrawlerIter<JS, TS> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.rx.recv().ok()
-	}
-}
-
-impl<JS: JobStateValues, TS: TaskStateValues> CrawlerIter<JS, TS> {
-	pub fn join(self) -> tokio::task::JoinHandle<Result<()>> {
-		self._h
 	}
 }
 
@@ -289,23 +282,19 @@ impl CrawlerCtx {
 		Self { name: String::from(name) }
 	}
 
-	pub fn run<F: Future>(
-		self,
-		ctx: impl FnOnce() -> F + Send + 'static,
-	) -> Result<std::thread::JoinHandle<Result<()>>> {
+	pub fn run<F: Future>(self, ctx: impl FnOnce() -> F + Send + 'static) -> Result<std::thread::JoinHandle<()>> {
 		let thread_builder = std::thread::Builder::new().name(self.name);
 
 		Ok(thread_builder
 			.spawn(move || {
-				let local_set = tokio::task::LocalSet::new();
 				let runtime = tokio::runtime::Builder::new_current_thread()
 					.enable_all()
 					.build()
-					.context("cannot create single threaded tokio runtime")?;
+					.expect("cannot create single threaded tokio runtime");
+
+				let local_set = tokio::task::LocalSet::new();
 
 				local_set.block_on(&runtime, ctx());
-
-				Ok::<_, Error>(())
 			})
 			.context("cannot spawn crawler context thread")?)
 	}
@@ -316,26 +305,18 @@ impl Crawler {
 		Self { networking_profile, tx_pp }
 	}
 
-	pub fn iter<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument>(
-		self,
-		job: Job<JS, TS, P>,
-	) -> CrawlerIter<JS, TS> {
+	pub fn iter<JS: JobStateValues, TS: TaskStateValues>() -> (Sender<JobUpdate<JS, TS>>, CrawlerIter<JS, TS>) {
 		let (tx, rx) = unbounded_ch();
 
-		let h = tokio::task::spawn_local(async move {
-			self.go(job, tx);
-			Ok::<_, Error>(())
-		});
-
-		CrawlerIter { rx, _h: h }
+		(tx, CrawlerIter { rx })
 	}
 
 	pub fn go<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument>(
 		self,
 		job: Job<JS, TS, P>,
 		update_tx: Sender<JobUpdate<JS, TS>>,
-	) -> TaskFut2<'static> {
-		TracingTask2::new(span!(url=%job.url), async move {
+	) -> TaskFut<'static> {
+		TracingTask::new(span!(url=%job.url), async move {
 			let job = ResolvedJob::from(job);
 
 			let scheduler = TaskScheduler::new(job.clone(), update_tx.clone());
@@ -435,7 +416,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 				.into_iter()
 				.map(|n| {
 					let mc = self.clone();
-					let ctx = CrawlerCtx::new(&format!("multi crawler {}", n));
+					let ctx = CrawlerCtx::new(&format!("multi-crawler-{}", n));
 					ctx.run(|| async move { mc.crawl_in_ctx().await })
 				})
 				.collect();

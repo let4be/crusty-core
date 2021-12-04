@@ -416,6 +416,7 @@ impl Default for CrawlingSettings {
 			job_soft_timeout:          CDuration::from_secs(240),
 			status_timeout:            CDuration::from_secs(5),
 			load_timeout:              CDuration::from_secs(10),
+			task_timeout:              CDuration::from_secs(15),
 			user_agent:                Some(String::from("crusty-core/0.82.0")),
 			compression:               true,
 			custom_headers:            HashMap::new(),
