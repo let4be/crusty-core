@@ -171,5 +171,5 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    Ok(ctx.join().unwrap())
+    Ok(ctx.join().await.unwrap())
 }

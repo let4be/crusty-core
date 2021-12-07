@@ -1,4 +1,4 @@
-use crate::{_prelude::*, config, types::*};
+use crate::{_prelude::*, config, types::*, CrawlerCtxJoinHandle};
 
 #[derive(Clone)]
 pub struct ParserProcessor {
@@ -46,9 +46,11 @@ impl ParserProcessor {
 		let mut core_ids = core_affinity::get_core_ids().unwrap().into_iter();
 
 		let mut pin = self.profile.pin;
-		let handles: Vec<Result<std::thread::JoinHandle<()>>> = (0..self.profile.concurrency)
+		let handles: Vec<Result<_>> = (0..self.profile.concurrency)
 			.into_iter()
 			.map(|n| {
+				let (tx_w, rx_w) = oneshot::channel();
+
 				let p = self.clone();
 				let mut thread_builder = std::thread::Builder::new().name(format!("parser processor {}", n));
 				if let Some(stack_size) = &self.profile.stack_size {
@@ -63,17 +65,20 @@ impl ParserProcessor {
 				};
 				let h = thread_builder
 					.spawn(move || {
+						let _ = tx_w;
+
 						if let Some(id) = id {
 							core_affinity::set_for_current(id);
 						}
+
 						let _ = futures_lite::future::block_on(p.process(n));
 					})
 					.context("cannot spawn parser processor thread")?;
-				Ok::<_, Error>(h)
+				Ok::<_, Error>(CrawlerCtxJoinHandle::new(h, rx_w))
 			})
 			.collect();
 		for h in handles {
-			let _ = h?.join();
+			let _ = h?.join().await;
 		}
 		Ok(())
 	}

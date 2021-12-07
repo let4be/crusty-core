@@ -126,5 +126,5 @@ async fn main() -> Result<()> {
     })?;
 
     h_sub.await?;
-    Ok(ctx.join().unwrap())
+    Ok(ctx.join().await.unwrap())
 }

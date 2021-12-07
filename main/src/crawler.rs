@@ -273,6 +273,22 @@ impl Crawler {
 	}
 }
 
+pub struct CrawlerCtxJoinHandle<T> {
+	h: std::thread::JoinHandle<T>,
+	w: oneshot::Receiver<()>,
+}
+
+impl<T> CrawlerCtxJoinHandle<T> {
+	pub fn new(h: std::thread::JoinHandle<T>, w: oneshot::Receiver<()>) -> Self {
+		Self { h, w }
+	}
+
+	pub async fn join(self) -> std::thread::Result<T> {
+		let _ = self.w.await;
+		self.h.join()
+	}
+}
+
 pub struct CrawlerCtx {
 	name: String,
 }
@@ -282,11 +298,14 @@ impl CrawlerCtx {
 		Self { name: String::from(name) }
 	}
 
-	pub fn run<F: Future>(self, ctx: impl FnOnce() -> F + Send + 'static) -> Result<std::thread::JoinHandle<()>> {
+	pub fn run<F: Future>(self, ctx: impl FnOnce() -> F + Send + 'static) -> Result<CrawlerCtxJoinHandle<()>> {
 		let thread_builder = std::thread::Builder::new().name(self.name);
 
-		Ok(thread_builder
+		let (tx_w, rx_w) = oneshot::channel();
+		let h = thread_builder
 			.spawn(move || {
+				let _ = tx_w;
+
 				let runtime = tokio::runtime::Builder::new_current_thread()
 					.enable_all()
 					.build()
@@ -296,7 +315,8 @@ impl CrawlerCtx {
 
 				local_set.block_on(&runtime, ctx());
 			})
-			.context("cannot spawn crawler context thread")?)
+			.context("cannot spawn crawler context thread")?;
+		Ok(CrawlerCtxJoinHandle::new(h, rx_w))
 	}
 }
 
@@ -421,7 +441,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> MultiCrawler<JS
 				})
 				.collect();
 			for h in handles {
-				let _ = h?.join();
+				let _ = h?.join().await;
 			}
 			Ok(())
 		})
