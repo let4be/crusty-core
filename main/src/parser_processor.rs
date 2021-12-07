@@ -1,4 +1,4 @@
-use crate::{_prelude::*, config, types::*, CrawlerCtxJoinHandle};
+use crate::{_prelude::*, config, types::*, CrawlerCtx, CrawlerCtxJoinHandle};
 
 #[derive(Clone)]
 pub struct ParserProcessor {
@@ -10,12 +10,13 @@ impl ParserProcessor {
 	pub fn spawn(
 		concurrency_profile: config::ConcurrencyProfile,
 		parser_profile: config::ParserProfile,
-	) -> Sender<ParserTask> {
+	) -> Result<(Sender<ParserTask>, CrawlerCtxJoinHandle<()>)> {
 		let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size());
 
 		let s = Self { profile: parser_profile, rx };
-		let _ = tokio::task::spawn_local(s.go());
-		tx
+
+		let ctx = CrawlerCtx::new("parser-processor");
+		Ok((tx, ctx.run(|| s.go())?))
 	}
 
 	fn process(&self, n: usize) -> TaskFut {

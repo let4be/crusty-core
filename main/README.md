@@ -110,7 +110,7 @@ impl TaskExpander<JobState, TaskState, Document> for DataExtractor {
 async fn main() -> anyhow::Result<()> {
     let concurrency_profile = config::ConcurrencyProfile::default();
     let parser_profile = config::ParserProfile::default();
-    let tx_pp = ParserProcessor::spawn(concurrency_profile, parser_profile);
+    let (tx_pp, h_pp) = ParserProcessor::spawn(concurrency_profile, parser_profile)?;
 
     let (tx_iter, iter) = Crawler::iter();
 
@@ -136,6 +136,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    h_pp.join().await.unwrap();
     Ok(ctx.join().await.unwrap())
 }
 
