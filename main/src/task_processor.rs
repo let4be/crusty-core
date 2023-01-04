@@ -358,10 +358,9 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		TracingTask::new(span!(n=n, url=%self.job.url), async move {
 			let (client, mut stats) = self.client_factory.make();
 
-			let jitter_ms = {
-				let mut rng = thread_rng();
-				Duration::from_millis(rng.gen_range(0..self.job.settings.job_hard_timeout_jitter.as_millis()) as u64)
-			};
+			let jitter_ms = Duration::from_millis(
+				thread_rng().gen_range(0..self.job.settings.job_hard_timeout_jitter.as_millis()) as u64,
+			);
 			let mut timeout = self.job.ctx.timeout_remaining(*self.job.settings.job_hard_timeout + jitter_ms);
 
 			while let Ok(task) = self.tasks_rx.recv_async().await {

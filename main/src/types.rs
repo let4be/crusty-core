@@ -1,4 +1,4 @@
-use humansize::{file_size_opts, FileSize};
+use humansize::{FormatSize, DECIMAL};
 use thiserror::{self, Error};
 
 use crate::{_prelude::*, config, load_filters, status_filters, task_expanders, task_filters};
@@ -529,8 +529,8 @@ impl fmt::Display for LoadResult {
 					f,
 					"loaded {}ms / write {} / read {}",
 					m.duration.as_millis(),
-					m.write_size.file_size(file_size_opts::CONVENTIONAL).unwrap(),
-					m.read_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
+					m.write_size.format_size(DECIMAL),
+					m.read_size.format_size(DECIMAL)
 				)
 			}
 			LoadResult(Some(Err(ref err))) => {

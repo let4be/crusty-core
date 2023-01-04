@@ -136,89 +136,7 @@ impl<'de> Deserialize<'de> for CDuration {
 }
 
 pub type AsyncTrustDnsResolverConfig = trust_dns_resolver::config::ResolverConfig;
-pub struct AsyncTrustDnsResolverOptsMapping(trust_dns_resolver::config::ResolverOpts);
-
-impl Deref for AsyncTrustDnsResolverOptsMapping {
-	type Target = trust_dns_resolver::config::ResolverOpts;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(default)]
-#[serde(deny_unknown_fields)]
-pub struct AsyncTrustDnsResolverOpts {
-	pub ndots:                  usize,
-	pub timeout:                CDuration,
-	pub attempts:               usize,
-	pub rotate:                 bool,
-	pub check_names:            bool,
-	pub edns0:                  bool,
-	pub validate:               bool,
-	pub ip_strategy:            trust_dns_resolver::config::LookupIpStrategy,
-	pub cache_size:             usize,
-	pub use_hosts_file:         bool,
-	pub positive_min_ttl:       Option<CDuration>,
-	pub negative_min_ttl:       Option<CDuration>,
-	pub positive_max_ttl:       Option<CDuration>,
-	pub negative_max_ttl:       Option<CDuration>,
-	pub num_concurrent_reqs:    usize,
-	pub preserve_intermediates: bool,
-}
-
-impl From<AsyncTrustDnsResolverOpts> for AsyncTrustDnsResolverOptsMapping {
-	fn from(p: AsyncTrustDnsResolverOpts) -> AsyncTrustDnsResolverOptsMapping {
-		AsyncTrustDnsResolverOptsMapping(trust_dns_resolver::config::ResolverOpts {
-			ndots:                  p.ndots,
-			timeout:                *p.timeout,
-			attempts:               p.attempts,
-			rotate:                 p.rotate,
-			check_names:            p.check_names,
-			edns0:                  p.edns0,
-			validate:               p.validate,
-			ip_strategy:            p.ip_strategy,
-			cache_size:             p.cache_size,
-			use_hosts_file:         p.use_hosts_file,
-			positive_min_ttl:       p.positive_min_ttl.map(|v| *v),
-			negative_min_ttl:       p.negative_min_ttl.map(|v| *v),
-			positive_max_ttl:       p.positive_max_ttl.map(|v| *v),
-			negative_max_ttl:       p.negative_max_ttl.map(|v| *v),
-			num_concurrent_reqs:    p.num_concurrent_reqs,
-			preserve_intermediates: p.preserve_intermediates,
-		})
-	}
-}
-
-impl From<AsyncTrustDnsResolverOptsMapping> for AsyncTrustDnsResolverOpts {
-	fn from(p: AsyncTrustDnsResolverOptsMapping) -> AsyncTrustDnsResolverOpts {
-		AsyncTrustDnsResolverOpts {
-			ndots:                  p.ndots,
-			timeout:                CDuration(p.timeout),
-			attempts:               p.attempts,
-			rotate:                 p.rotate,
-			check_names:            p.check_names,
-			edns0:                  p.edns0,
-			validate:               p.validate,
-			ip_strategy:            p.ip_strategy,
-			cache_size:             p.cache_size,
-			use_hosts_file:         p.use_hosts_file,
-			positive_min_ttl:       p.positive_min_ttl.map(CDuration),
-			negative_min_ttl:       p.negative_min_ttl.map(CDuration),
-			positive_max_ttl:       p.positive_max_ttl.map(CDuration),
-			negative_max_ttl:       p.negative_max_ttl.map(CDuration),
-			num_concurrent_reqs:    p.num_concurrent_reqs,
-			preserve_intermediates: p.preserve_intermediates,
-		}
-	}
-}
-
-impl Default for AsyncTrustDnsResolverOpts {
-	fn default() -> Self {
-		AsyncTrustDnsResolverOptsMapping(trust_dns_resolver::config::ResolverOpts::default()).into()
-	}
-}
+pub type AsyncTrustDnsResolverOpts = trust_dns_resolver::config::ResolverOpts;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -355,14 +273,14 @@ impl ResolvedNetworkingProfile {
 
 	fn new(p: NetworkingProfile) -> Result<Self> {
 		let (config, options) = if let (Some(config), Some(options)) = (p.resolver.config, p.resolver.options) {
-			(config, options.into())
+			(config, options)
 		} else {
 			let (config, options) = trust_dns_resolver::system_conf::read_system_conf()
 				.context("cannot read resolver config settings from system")?;
-			(config, AsyncTrustDnsResolverOptsMapping(options))
+			(config, options as AsyncTrustDnsResolverOpts)
 		};
 
-		let mut resolver = AsyncTrustDnsResolver::new(config, *options).context("cannot create default resolver")?;
+		let mut resolver = AsyncTrustDnsResolver::new(config, options).context("cannot create default resolver")?;
 
 		let reserved_v4 = RESERVED_V4_SUBNETS
 			.clone()
