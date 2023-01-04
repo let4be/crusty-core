@@ -97,7 +97,7 @@ impl Deref for CBytes {
 impl<'de> Deserialize<'de> for CBytes {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CBytes, D::Error> {
 		let s: String = Deserialize::deserialize(deserializer)?;
-		let s = s.replace("_", "");
+		let s = s.replace('_', "");
 		let v = s.parse::<humanize_rs::bytes::Bytes>();
 		let r = v.map_err(de::Error::custom)?;
 		Ok(CBytes(r.size()))
@@ -128,7 +128,7 @@ impl CDuration {
 impl<'de> Deserialize<'de> for CDuration {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<CDuration, D::Error> {
 		let s: String = Deserialize::deserialize(deserializer)?;
-		let s = s.replace("_", "");
+		let s = s.replace('_', "");
 		let v = humanize_rs::duration::parse(&s);
 		let r = v.map_err(de::Error::custom)?;
 		Ok(CDuration(r))

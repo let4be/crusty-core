@@ -14,7 +14,7 @@ impl ParserProcessor {
 		let (tx, rx) = bounded_ch::<ParserTask>(concurrency_profile.transit_buffer_size());
 
 		let s = Self { profile: parser_profile, rx };
-		let _ = tokio::spawn(s.go());
+		std::mem::drop(tokio::spawn(s.go()));
 		Arc::new(tx)
 	}
 
@@ -47,10 +47,9 @@ impl ParserProcessor {
 
 		let mut pin = self.profile.pin;
 		let handles: Vec<Result<std::thread::JoinHandle<()>>> = (0..self.profile.concurrency)
-			.into_iter()
 			.map(|n| {
 				let p = self.clone();
-				let mut thread_builder = std::thread::Builder::new().name(format!("parser processor {}", n));
+				let mut thread_builder = std::thread::Builder::new().name(format!("parser processor {n}"));
 				if let Some(stack_size) = &self.profile.stack_size {
 					thread_builder = thread_builder.stack_size(stack_size.0);
 				}

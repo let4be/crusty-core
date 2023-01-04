@@ -38,7 +38,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for Selecti
 	}
 
 	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, task_seq_num: usize, task: &mut rt::Task) -> Result {
-		let link_target = self.link_targets.iter().find(|target| target.to_string() == task.link.target.to_string());
+		let link_target = self.link_targets.iter().find(|target| **target == task.link.target);
 		if link_target.is_none() {
 			return Ok(Action::Accept)
 		}
@@ -111,11 +111,7 @@ impl SameDomain {
 	struct_name! {}
 
 	pub fn new(www_allow: bool) -> Self {
-		let mut strip_prefix = "";
-		if www_allow {
-			strip_prefix = "www.";
-		}
-		Self { strip_prefix: String::from(strip_prefix) }
+		Self { strip_prefix: String::from(if www_allow { "www." } else { "" }) }
 	}
 }
 
@@ -219,7 +215,7 @@ pub const ROBOTS_TXT_LINK_MARKER: u8 = 1;
 impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsTxt {
 	name! {}
 
-	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, n: usize, task: &mut rt::Task) -> Result {
+	fn accept(&mut self, ctx: &mut rt::JobCtx<JS, TS>, _n: usize, task: &mut rt::Task) -> Result {
 		match self.state {
 			RobotsTxtState::None => {
 				if !task.is_root() {
@@ -227,12 +223,17 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 				}
 
 				let url = Url::parse(
-					format!("{}://{}/robots.txt", ctx.root_url.scheme(), ctx.root_url.host_str().unwrap()).as_str(),
+					format!(
+						"{}://{}/robots.txt",
+						ctx.root_url.scheme(),
+						ctx.root_url.host_str().context("missing host")?
+					)
+					.as_str(),
 				)
 				.context("cannot create robots.txt url")?;
 
 				let mut link = rt::Link::new_abs(url, "", "", "", 0, rt::LinkTarget::Load);
-				link.marker = 1;
+				link.marker = ROBOTS_TXT_LINK_MARKER;
 
 				let mut link = Arc::new(link);
 				mem::swap(&mut link, &mut task.link);
@@ -266,7 +267,7 @@ impl<JS: rt::JobStateValues, TS: rt::TaskStateValues> Filter<JS, TS> for RobotsT
 						self.matcher = matcher.take();
 					}
 				}
-				self.accept(ctx, n, task)
+				self.accept(ctx, _n, task)
 			}
 			RobotsTxtState::FilteringEnabled => {
 				if let Some(ref mut matcher) = &mut self.matcher {

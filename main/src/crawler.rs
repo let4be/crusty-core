@@ -220,11 +220,11 @@ impl HttpClientFactory {
 
 impl ClientFactory for HttpClientFactory {
 	fn make(&self) -> (HttpClient, hyper_utils::Stats) {
-		let v = self.networking_profile.profile.clone();
+		let v = &self.networking_profile.profile;
 
 		let resolver_adaptor = Adaptor::new(Arc::clone(&self.networking_profile.resolver));
 		let mut http = hyper::client::HttpConnector::new_with_resolver(resolver_adaptor);
-		http.set_connect_timeout(v.connect_timeout.map(|v| *v));
+		http.set_connect_timeout(v.connect_timeout.as_ref().map(|v| **v));
 
 		match (self.bind_local_ipv4(), self.bind_local_ipv6()) {
 			(Some(ipv4), Some(ipv6)) => http.set_local_addresses(ipv4, ipv6),
@@ -233,8 +233,8 @@ impl ClientFactory for HttpClientFactory {
 			(None, None) => {}
 		}
 
-		http.set_recv_buffer_size(v.socket_read_buffer_size.map(|v| *v));
-		http.set_send_buffer_size(v.socket_write_buffer_size.map(|v| *v));
+		http.set_recv_buffer_size(v.socket_read_buffer_size.as_ref().map(|v| **v));
+		http.set_send_buffer_size(v.socket_write_buffer_size.as_ref().map(|v| **v));
 		http.enforce_http(false);
 		let http_counting = hyper_utils::CountingConnector::new(http);
 		let stats = http_counting.stats.clone();

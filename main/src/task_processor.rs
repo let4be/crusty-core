@@ -63,7 +63,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		while let Some(buf) = body.data().await {
 			let buf = buf.context("error during reading")?;
 			if buf.has_remaining() {
-				if bytes.len() + buf.len() > *self.job.settings.max_response_size as usize {
+				if bytes.len() + buf.len() > *self.job.settings.max_response_size {
 					return Err(anyhow!("max response size reached: {}", *self.job.settings.max_response_size))
 				}
 				bytes.put(buf);
@@ -120,7 +120,7 @@ impl<JS: JobStateValues, TS: TaskStateValues, P: ParsedDocument> TaskProcessor<J
 		let host =
 			task.link.url.host_str().with_context(|| format!("cannot get host from {:?}", task.link.url.as_str()))?;
 
-		let res = self.resolver.resolve(host).await.with_context(|| format!("cannot resolve host {} -> ip", host))?;
+		let res = self.resolver.resolve(host).await.with_context(|| format!("cannot resolve host {host} -> ip"))?;
 
 		Ok(ResolveData { metrics: ResolveMetrics { duration: t.elapsed() }, addrs: res.collect() })
 	}

@@ -174,7 +174,7 @@ pub enum LinkTarget {
 
 impl fmt::Display for LinkTarget {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{:?}", self)
+		write!(f, "{self:?}")
 	}
 }
 
@@ -216,9 +216,9 @@ impl HeaderMap {
 		let name_str = String::from(name.as_str());
 		self.0
 			.get(name)
-			.ok_or_else(|| anyhow!("{}: not found", name_str))?
+			.ok_or_else(|| anyhow!("{name_str}: not found"))?
 			.to_str()
-			.with_context(|| format!("cannot read {} value", name_str))
+			.with_context(|| format!("cannot read {name_str} value"))
 	}
 }
 
@@ -514,7 +514,7 @@ impl fmt::Display for StatusResult {
 				)
 			}
 			StatusResult(Some(Err(ref err))) => {
-				write!(f, "[err]: {:#}", err)
+				write!(f, "[err]: {err:#}")
 			}
 		}
 	}
@@ -534,7 +534,7 @@ impl fmt::Display for LoadResult {
 				)
 			}
 			LoadResult(Some(Err(ref err))) => {
-				write!(f, "[err loading]: {:#}", err)
+				write!(f, "[err loading]: {err:#}")
 			}
 			LoadResult(None) => {
 				write!(f, "none")
@@ -551,7 +551,7 @@ impl fmt::Display for FollowResult {
 				write!(f, "parsed {}ms", m.duration.as_millis())
 			}
 			FollowResult(Some(Err(ref err))) => {
-				write!(f, "[err following]: {:#}", err)
+				write!(f, "[err following]: {err:#}")
 			}
 			FollowResult(None) => {
 				write!(f, "none")

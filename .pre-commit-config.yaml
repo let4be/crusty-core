@@ -15,7 +15,7 @@ repos:
     hooks:
         -   id: fmt
             name: Format sources
-            entry: bash -c "cargo +nightly fmt --"
+            entry: bash -c "cargo +nightly fmt -- || 1"
             language: system
             pass_filenames: false
         -   id: clippy
@@ -30,7 +30,7 @@ repos:
             pass_filenames: false
         -   id: udeps
             name: Find unused dependencies
-            entry: bash -c "cargo +nightly udeps --all-targets "
+            entry: bash -c "cargo +nightly udeps --all-targets"
             language: system
             pass_filenames: false
         -   id: generate-readme

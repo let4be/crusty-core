@@ -3,10 +3,12 @@ set -e
 
 case $1 in
   setup)
+    rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
     rustup component add clippy --toolchain nightly
     cargo install cargo-release --version ~0.13.0
     cargo install cargo-udeps --version ~0.1.24
+    pip install pre-commit MarkdownPP
     pre-commit install
     echo "Ready to go..."
     ;;
